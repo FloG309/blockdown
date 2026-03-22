@@ -1,0 +1,284 @@
+body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    color: #333;
+    /* Prevent text selection during rubber band drag */
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Re-enable text selection inside textareas */
+textarea {
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+header {
+    background-color: #f3f4f6;
+    padding: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.container {
+    display: flex;
+    flex: 1;
+
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+#preview-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+#preview {
+    width: 75%;
+    max-width: 100%;
+    padding: 1rem;
+    overflow-y: auto;
+    border-left: 1px solid #e5e7eb;
+    line-height: 1.6;
+}
+
+#preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    padding: 0.25rem;
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+}
+
+#preview h1.selected, #preview h2.selected, #preview h3.selected,
+#preview h4.selected, #preview h5.selected, #preview h6.selected {
+    background-color: #e1f0ff;
+}
+
+#preview p {
+    margin-bottom: 1rem;
+    padding: 0.25rem;
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+}
+
+#preview p.selected {
+    background-color: #e1f0ff;
+}
+
+#preview code {
+    background-color: #f3f4f6;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+}
+
+#preview code.selected {
+    background-color: #e1f0ff;
+}
+
+#preview pre {
+    background-color: #f3f4f6;
+    padding: 1rem;
+    border-radius: 5px;
+    overflow-x: auto;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+}
+
+#preview pre.selected {
+    background-color: #e1f0ff;
+}
+
+#preview pre code {
+    background-color: transparent;
+    padding: 0;
+}
+
+#preview blockquote {
+    border-left: 4px solid #e5e7eb;
+    margin-left: 0;
+    color: #6b7280;
+    transition: background-color 0.2s ease;
+    border-radius: 3px;
+    padding: 0.25rem 1rem;
+    cursor: pointer;
+}
+
+#preview blockquote.selected {
+    background-color: #e1f0ff;
+}
+
+#preview ul, #preview ol {
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+}
+
+#preview ul.selected, #preview ol.selected {
+    background-color: #e1f0ff;
+}
+
+/* Nested lists (sub-lists) should not have extra margin */
+#preview li > ul, #preview li > ol {
+    margin-bottom: 0;
+}
+
+#preview li {
+    padding: 0.2rem;
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+}
+
+#preview blockquote * {
+    cursor: default;
+    pointer-events: none;
+}
+
+/* Make sure blockquote text is not separately selectable */
+#preview blockquote p {
+    background-color: transparent;
+    margin: 0;
+    padding: 0;
+}
+
+/* Remove hover styles for inner elements */
+#preview pre *,
+#preview ul *,
+#preview ol *,
+#preview table * {
+    cursor: default;
+    pointer-events: none;
+}
+
+#preview table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1rem;
+    transition: background-color 0.2s ease;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+#preview table.selected {
+    background-color: #e1f0ff;
+}
+
+#preview th, #preview td {
+    border: 1px solid #e5e7eb;
+    padding: 0.5rem;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+}
+
+#preview th.selected, #preview td.selected {
+    background-color: #e1f0ff;
+}
+
+#preview th {
+    background-color: #f9fafb;
+}
+
+#preview img {
+    max-width: 100%;
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+}
+
+#preview img.selected {
+    background-color: #e1f0ff;
+}
+
+#preview a {
+    transition: background-color 0.2s ease;
+    border-radius: 3px;
+    padding: 0 0.2rem;
+    cursor: pointer;
+}
+
+#preview a.selected {
+    background-color: #e1f0ff;
+}
+
+#preview hr {
+    margin: 1.5rem 0;
+    border: 0;
+    height: 1px;
+    background-color: #e5e7eb;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+}
+
+#preview hr.selected {
+    background-color: #e1f0ff;
+    height: 3px;
+}
+
+.footer {
+    background-color: #f3f4f6;
+    padding: 0.75rem 1rem;
+    text-align: center;
+    border-top: 1px solid #e5e7eb;
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.shortcut {
+    display: inline-block;
+    background-color: #e5e7eb;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.8rem;
+}
+
+
+@import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');
+
+textarea {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #222;
+
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 0.5em;
+  resize: none;
+  outline: none;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+textarea:focus {
+  background-color: #ffffff;
+  border-color: #888;
+}
+
+textarea.selected {
+  background-color: #e1f0ff;
+  border-color: #2b77d9;
+}
