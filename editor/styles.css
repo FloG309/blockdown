@@ -288,3 +288,64 @@ textarea.selected {
   background-color: #e1f0ff;
   border-color: #2b77d9;
 }
+
+/* ---- CodeMirror wrapper integration ---- */
+
+.cm-wrapper {
+  width: 100%;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.cm-wrapper.selected {
+  /* Highlight the wrapper border when selected in navigation mode */
+}
+
+.cm-wrapper.selected > .cm-editor {
+  border-color: #2b77d9;
+  background-color: #f8fbff;
+}
+
+/* CodeMirror line decoration classes */
+.cm-md-h1 {
+  font-size: 1.8em;
+  font-weight: 600;
+  margin-bottom: 0.6em;
+}
+
+.cm-md-h2 {
+  font-size: 1.4em;
+  font-weight: 600;
+  margin-bottom: 0.4em;
+}
+
+.cm-md-h3 {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin-bottom: 0.3em;
+}
+
+.cm-md-blockquote {
+  border-left: 3px solid #ddd;
+  padding-left: 0.8em;
+  color: #666;
+}
+
+.cm-md-list-item {
+  padding-left: 0.5em;
+}
+
+.cm-md-code-fence {
+  font-family: 'Courier New', Courier, monospace;
+  color: #999;
+}
+
+.cm-md-code-line {
+  font-family: 'Courier New', Courier, monospace;
+  background: #f6f6f6;
+  line-height: 1.3;
+}
+
+.cm-md-blank-line {
+  margin-bottom: 0.8em;
+}

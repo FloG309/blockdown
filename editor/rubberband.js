@@ -52,6 +52,7 @@
             if (e.button !== 0) return;
             if (e.target.tagName === 'TEXTAREA') return;
             if (e.target.closest('textarea')) return;
+            if (e.target.closest('.cm-editor')) return;
 
             isSelecting = true;
             didDrag = false;
@@ -104,8 +105,9 @@
 
             let lastSelectedIndex = -1;
             selectableElements.forEach((el, index) => {
-                // Skip textareas in rubber band selection
+                // Skip textareas and CM editors in rubber band selection
                 if (el.tagName === 'TEXTAREA') return;
+                if (el.classList && el.classList.contains('cm-wrapper')) return;
 
                 const elRect = el.getBoundingClientRect();
                 if (rectsIntersect(bandRect, elRect)) {

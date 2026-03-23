@@ -70,22 +70,34 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('keydown', function(e) {
         const now = Date.now();
         const isTextarea = e.target.tagName === 'TEXTAREA';
+        // Detect if focus is inside a CodeMirror editor (contenteditable div inside .cm-editor)
+        const isCMEditor = e.target.closest && e.target.closest('.cm-editor');
         const isInput = e.target.tagName === 'INPUT' || e.target.isContentEditable;
+        const isEditing = isTextarea || isCMEditor || isInput;
 
-        // Handle undo/redo (works everywhere, including textareas)
+        // Handle undo/redo (works everywhere, including edit mode)
+        // But inside CM editor, let CM handle its own undo unless it's block-level
         if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
-            e.preventDefault();
-            undo();
+            if (!isCMEditor) {
+                e.preventDefault();
+                undo();
+                return;
+            }
+            // Let CM handle its own undo
             return;
         }
         if (e.ctrlKey && (e.key === 'y' || (e.key === 'z' && e.shiftKey)) || (e.ctrlKey && e.shiftKey && e.key === 'Z')) {
-            e.preventDefault();
-            redo();
+            if (!isCMEditor) {
+                e.preventDefault();
+                redo();
+                return;
+            }
+            // Let CM handle its own redo
             return;
         }
 
-        // Handle keys for form inputs form inputs
-        if (isTextarea || isInput) return;
+        // Handle keys for form inputs / edit mode
+        if (isEditing) return;
 
         // Handle delete option
 
@@ -95,7 +107,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Double D pressed: delete triggered!');
                 pushUndo();
                 const selectedElements = document.querySelectorAll('.selected');
-                selectedElements.forEach(el => el.remove());
+                selectedElements.forEach(el => {
+                    // Destroy CM editors before removing
+                    if (el._cmView && window.CM) {
+                        window.CM.destroyEditor(el._cmView);
+                    }
+                    el.remove();
+                });
                 lastKey = null;  // reset
             } else {
                 lastKey = 'd';
@@ -106,12 +124,24 @@ document.addEventListener('DOMContentLoaded', function() {
             lastKey = null;
         }
 
-        //handle special case where textarea is selected, but not focused (== no active cursor)
+        // Handle special case where textarea/CM wrapper is selected but not focused
         const selectedElement = selectableElements[currentSelectedIndex]
         if (selectedElement && selectedElement.tagName === 'TEXTAREA') {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 selectedElement.focus();
+                selectedElement.classList.remove('selected');
+                return;
+            }
+        }
+        // Handle special case where CM wrapper is selected but not focused
+        if (selectedElement && selectedElement.classList && selectedElement.classList.contains('cm-wrapper')) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                // Focus the CM editor inside
+                if (selectedElement._cmView) {
+                    selectedElement._cmView.focus();
+                }
                 selectedElement.classList.remove('selected');
                 return;
             }
