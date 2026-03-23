@@ -151,9 +151,161 @@ All features are interaction-heavy, so **Playwright E2E tests** remain the prima
 
 ---
 
+## Feature 9: Styled contenteditable edit mode
+
+**Problem:** When the user presses Enter to edit a block, they see a plain `<textarea>` with raw markdown — no visual cues about what's a header, what's bold, what's a code span, etc. This creates a jarring context switch between the polished rendered view and the plain-text editing experience.
+
+**Goal:** Replace the `<textarea>` in edit mode with a `contenteditable` div that applies live syntax highlighting to raw markdown text. The user still writes raw markdown, but inline tokens (`**bold**`, `*italic*`, `` `code` ``) and block-level prefixes (`# `, `> `, `- `) are visually styled in-place. Dynamic vertical spacing approximates rendered output, so the editing experience feels closer to WYSIWYG without actually being WYSIWYG.
+
+### Markdown syntax highlighting in edit mode
+
+When the user presses Enter on a rendered block, the replacement element is a `contenteditable` div (not a textarea). The raw markdown text is displayed with visual styling:
+
+- `**bold**` text appears **bold** (the delimiter characters are dimmed/muted, inner text is `font-weight: 600`)
+- `*italic*` text appears *italic* (delimiters dimmed, inner text is `font-style: italic`)
+- `# Header` lines get a larger `font-size` proportional to heading level (`#` = 1.8em, `##` = 1.4em, `###` = 1.2em, etc.) with the `#` markers dimmed
+- `` `inline code` `` gets `font-family: monospace`, a subtle background color (`#f0f0f0`), and `border-radius: 3px`
+- `> blockquote` lines get a left border (`3px solid #ddd`) and muted text color (`#666`)
+- List markers (`- `, `* `, `1. `) are styled in a muted color so they recede visually
+- Fenced code block delimiters (`` ``` ``) are styled in muted monospace; lines between them get monospace font and a light background
+- Links `[text](url)` — bracket/paren syntax is dimmed, link text is styled blue
+
+### Dynamic vertical spacing
+
+Lines inside the contenteditable div receive variable spacing to approximate the rendered output:
+
+- Header lines (`#`, `##`, etc.) get extra `margin-bottom` proportional to their level (e.g., `#` = 0.6em, `##` = 0.4em, `###` = 0.3em)
+- List item lines get consistent padding matching rendered `<li>` spacing
+- Blank lines between paragraphs render as actual vertical gaps (a `<div>` with `margin-bottom: 0.8em` rather than collapsing)
+- Lines inside fenced code blocks get tighter `line-height` (1.3) and monospace styling, matching `<pre>` rendering
+
+### Implementation
+
+#### New module: `editor/markdownHighlight.js`
+
+A single exported function `highlightMarkdown(text)`:
+
+1. **Input:** Raw markdown string (the plain text content of the contenteditable div).
+2. **Processing:** Regex-based, two-pass tokenizer:
+   - **Pass 1 — Block-level (line-by-line):** Identify heading lines, blockquote lines, list items, fenced code block delimiters, fenced code block body lines, blank lines. Wrap each line in a `<div>` with the appropriate CSS class (e.g., `class="md-h1"`, `class="md-blockquote"`, `class="md-code-fence"`).
+   - **Pass 2 — Inline (within each line):** Within non-code lines, identify and wrap bold (`**...**`), italic (`*...*`), inline code (`` `...` ``), links (`[text](url)`), and other inline tokens in `<span>` elements with CSS classes (e.g., `class="md-bold"`, `class="md-italic"`). Delimiter characters get an additional `class="md-dim"` to mute them visually.
+3. **Output:** HTML string ready to be set as `innerHTML` of the contenteditable div.
+
+#### Cursor / caret management
+
+Saving and restoring cursor position is critical since `innerHTML` replacement destroys the DOM:
+
+1. **Before re-render:** Walk the contenteditable div's text nodes using `document.createTreeWalker(NodeFilter.SHOW_TEXT)` to compute a flat character offset from the start of the div to the current `Selection` anchor.
+2. **After re-render:** Walk the new DOM's text nodes with the same TreeWalker approach to find the text node and local offset corresponding to the saved flat offset, then call `selection.collapse(node, offset)` to restore the caret.
+3. Wrap this in helpers: `saveCaretOffset(editableDiv) → number` and `restoreCaretOffset(editableDiv, offset)`.
+
+#### Modifications to `events.js`
+
+- **`handleEnter()`:** Instead of creating a `<textarea>`, create a `<div contenteditable="true" class="md-editable">`. Populate it with `highlightMarkdown(markdownText)`. Attach an `input` event listener that re-highlights on content changes (with caret save/restore). Attach `paste` event listener for plain-text-only paste.
+- **`handleTextareaEvent()`:** Rename or extend to `handleEditableEvent()`. The Shift+Enter (render) and Escape (blur + re-select) behaviors remain identical but now read `editableDiv.textContent` (plain text) instead of `textarea.value` to get the raw markdown for `marked.parse()`.
+- **`setupSelectionHandlers()`:** Add `div[contenteditable]` to the selector list so contenteditable divs are indexed as block-level elements.
+- **`renderMarkdownPartial()`:** Accept a contenteditable div in addition to a textarea. Extract plain text via `element.textContent`.
+
+#### Modifications to `editor/base.js`
+
+- The `keydown` listener's `isTextarea` guard needs to also detect `contenteditable` divs: `const isEditing = isTextarea || target.isContentEditable`.
+- `turndownService` usage in `handleEnter()` remains unchanged — it still receives the rendered block's `outerHTML`.
+
+#### Modifications to `editor/styles.css`
+
+New CSS classes for markdown token styling:
+
+```css
+/* Contenteditable edit container */
+.md-editable { /* base styles: font, padding, border, outline, width */ }
+
+/* Block-level line types */
+.md-h1 { font-size: 1.8em; font-weight: 600; margin-bottom: 0.6em; }
+.md-h2 { font-size: 1.4em; font-weight: 600; margin-bottom: 0.4em; }
+.md-h3 { font-size: 1.2em; font-weight: 600; margin-bottom: 0.3em; }
+.md-h4, .md-h5, .md-h6 { font-size: 1em; font-weight: 600; }
+.md-blockquote { border-left: 3px solid #ddd; padding-left: 0.8em; color: #666; }
+.md-list-item { padding-left: 0.5em; }
+.md-code-fence { font-family: monospace; color: #999; }
+.md-code-line { font-family: monospace; background: #f6f6f6; line-height: 1.3; }
+.md-blank-line { margin-bottom: 0.8em; }
+
+/* Inline token styles */
+.md-bold { font-weight: 600; }
+.md-italic { font-style: italic; }
+.md-inline-code { font-family: monospace; background: #f0f0f0; border-radius: 3px; padding: 0.1em 0.3em; }
+.md-link-text { color: #0366d6; }
+.md-dim { opacity: 0.4; } /* delimiter characters */
+```
+
+#### Modifications to `editor/editor.html`
+
+- Add `<script src="markdownHighlight.js"></script>` before `events.js` (since `events.js` calls `highlightMarkdown()`).
+
+### Edge cases
+
+- **Paste handling:** Intercept `paste` events on the contenteditable div. Call `e.preventDefault()`, read `e.clipboardData.getData('text/plain')`, and insert via `document.execCommand('insertText', false, plainText)` to strip any HTML formatting.
+- **Multi-line selections and cursor position across styled spans:** The TreeWalker-based caret save/restore handles arbitrary nesting of `<span>` and `<div>` elements by counting only text node characters.
+- **Performance:** Only re-highlight on `input` events (content actually changed), not on every `keydown`. Debounce is unnecessary for typical block sizes (< 100 lines), but add a guard that skips re-highlight if `textContent` hasn't changed since last highlight.
+- **`setupSelectionHandlers()` selector:** Add `div[contenteditable]` so these divs are picked up as selectable elements and can transition back to rendered blocks.
+- **Tab key handling:** Intercept `keydown` for Tab inside the contenteditable div. Prevent default, insert 2 or 4 spaces at caret using `document.execCommand('insertText', false, '  ')`.
+- **Undo behavior:** The browser's native contenteditable undo (`Ctrl+Z` while focused inside the div) handles character-level edits. The block-level undo/redo system (Feature 5) still snapshots before entering and exiting edit mode, so the user can undo the entire edit operation at the block level.
+- **Empty contenteditable div:** Ensure an empty div still has a minimum height and shows the cursor. Use `:empty::before` pseudo-element with placeholder text if desired.
+- **XSS safety:** The `highlightMarkdown()` function must HTML-escape the raw markdown text before wrapping in span/div tags. All user text goes through escaping; only the structural `<span>` / `<div>` tags added by the highlighter are unescaped.
+
+### Affected files
+
+- **New:** `editor/markdownHighlight.js` — `highlightMarkdown(text)`, `saveCaretOffset()`, `restoreCaretOffset()` functions
+- **Modified:** `editor/events.js` — `handleEnter()` creates contenteditable div instead of textarea; `handleTextareaEvent()` extended to handle contenteditable; `setupSelectionHandlers()` updated selector; `renderMarkdownPartial()` accepts contenteditable div
+- **Modified:** `editor/styles.css` — new `.md-editable`, `.md-h1`–`.md-h6`, `.md-bold`, `.md-italic`, `.md-inline-code`, `.md-dim`, etc. classes
+- **Modified:** `editor/editor.html` — add `<script>` include for `markdownHighlight.js`
+- **Modified:** `editor/base.js` — `isTextarea` guard expanded to include `isContentEditable` check
+
+---
+
+## Testing Strategy — Feature 9 (Styled contenteditable edit mode) — Playwright
+
+**Edit mode entry and exit:**
+- Select a rendered paragraph → press Enter → verify a `div[contenteditable]` appears (not a textarea)
+- Type markdown text in the contenteditable div → press Shift+Enter → verify it renders correctly via `marked.parse()`
+- Press Escape in the contenteditable div → verify it exits edit mode and re-selects the rendered block
+
+**Syntax highlighting:**
+- Enter edit mode on a block containing `**bold**` → verify a `.md-bold` span exists with the correct text
+- Enter edit mode on a `# Heading` block → verify the line div has class `md-h1` and visually larger font
+- Enter edit mode on a block with `` `code` `` → verify `.md-inline-code` span is present
+- Enter edit mode on a blockquote → verify `.md-blockquote` class and left border style
+- Enter edit mode on a fenced code block → verify `.md-code-fence` and `.md-code-line` classes
+- Verify delimiter characters (`**`, `` ` ``, `#`) have `.md-dim` class (muted opacity)
+
+**Live re-highlighting:**
+- Enter edit mode → type `**hello**` → verify `.md-bold` span appears dynamically after input
+- Enter edit mode → type text → verify cursor position is preserved after re-highlight (caret doesn't jump to start or end)
+- Enter edit mode → make no changes → verify no unnecessary re-render occurs
+
+**Dynamic vertical spacing:**
+- Enter edit mode on a multi-paragraph block → verify blank lines produce visible vertical gaps (`.md-blank-line` elements with margin)
+- Enter edit mode on a heading → verify extra bottom margin on the heading line div
+
+**Paste handling:**
+- Copy rich HTML from another source → paste into contenteditable div → verify only plain text is inserted (no HTML tags in content)
+
+**Tab handling:**
+- Focus the contenteditable div → press Tab → verify spaces are inserted at cursor position (not focus change)
+
+**Integration with block navigation:**
+- Contenteditable div should be reachable via `setupSelectionHandlers()` — verify arrow key navigation includes it
+- After rendering (Shift+Enter), the new rendered block(s) should be navigable
+
+**Integration with undo/redo (Feature 5):**
+- Enter edit mode → modify content → Shift+Enter to render → Ctrl+Z → verify original rendered block is restored
+
+---
+
 ## Implementation order
 
 1. **Feature 7** (syntax highlighting) — smallest scope, no interaction with other features, immediate visual payoff.
 2. **Feature 5** (undo/redo) — foundational; Features 6 depends on it for safe destructive actions.
 3. **Feature 6** (copy/paste) — builds on undo infrastructure.
 4. **Feature 8** (textarea height matching) — polish; improves edit-mode UX with no dependencies on other features.
+5. **Feature 9** (styled contenteditable edit mode) — replaces textarea with contenteditable div; depends on Feature 8's block-type detection logic for font sizing; should come after Feature 5 (undo) since it changes how edit-mode snapshots work. Most impactful UX improvement but also largest scope.
