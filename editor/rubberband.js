@@ -48,10 +48,12 @@
         const preview = document.getElementById('preview');
 
         preview.addEventListener('mousedown', function (e) {
-            // Only left click, and not on a textarea or inside one
+            // Only left click, and not on an editable element or inside one
             if (e.button !== 0) return;
             if (e.target.tagName === 'TEXTAREA') return;
             if (e.target.closest('textarea')) return;
+            if (e.target.isContentEditable) return;
+            if (e.target.closest('[contenteditable]')) return;
 
             isSelecting = true;
             didDrag = false;
@@ -104,8 +106,9 @@
 
             let lastSelectedIndex = -1;
             selectableElements.forEach((el, index) => {
-                // Skip textareas in rubber band selection
+                // Skip textareas and contenteditable divs in rubber band selection
                 if (el.tagName === 'TEXTAREA') return;
+                if (el.classList && el.classList.contains('md-editable')) return;
 
                 const elRect = el.getBoundingClientRect();
                 if (rectsIntersect(bandRect, elRect)) {

@@ -4,13 +4,14 @@ module.exports = defineConfig({
   testDir: './tests',
   timeout: 30000,
   use: {
-    baseURL: 'http://localhost:3999',
+    baseURL: 'http://localhost:4099',
     browserName: 'chromium',
   },
   webServer: {
     command: 'node serve.js',
-    port: 3999,
+    port: 4099,
     reuseExistingServer: true,
+    env: { PORT: '4099' },
   },
   projects: [
     {

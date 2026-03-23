@@ -45,6 +45,8 @@ turndownService.addRule('fencedCodeBlock', {
 
 // Ensure fenced code block style is used
 turndownService.options.codeBlockStyle = 'fenced';
+// Use ATX-style headings (## instead of underlines) for clean markdown
+turndownService.options.headingStyle = 'atx';
 // Use dashes for bullet lists (classic markdown style)
 turndownService.options.bulletListMarker = '-';
 
@@ -70,9 +72,11 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('keydown', function(e) {
         const now = Date.now();
         const isTextarea = e.target.tagName === 'TEXTAREA';
-        const isInput = e.target.tagName === 'INPUT' || e.target.isContentEditable;
+        // Detect both input fields and contenteditable divs as "editing" state
+        const isEditing = isTextarea || e.target.isContentEditable;
+        const isInput = e.target.tagName === 'INPUT';
 
-        // Handle undo/redo (works everywhere, including textareas)
+        // Handle undo/redo (works everywhere, including editing)
         if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
             e.preventDefault();
             undo();
@@ -84,8 +88,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Handle keys for form inputs form inputs
-        if (isTextarea || isInput) return;
+        // Handle keys for editing inputs — don't pass through to navigation
+        if (isEditing || isInput) return;
 
         // Handle delete option
 
@@ -106,9 +110,9 @@ document.addEventListener('DOMContentLoaded', function() {
             lastKey = null;
         }
 
-        //handle special case where textarea is selected, but not focused (== no active cursor)
+        //handle special case where contenteditable div is selected but not focused
         const selectedElement = selectableElements[currentSelectedIndex]
-        if (selectedElement && selectedElement.tagName === 'TEXTAREA') {
+        if (selectedElement && (selectedElement.tagName === 'TEXTAREA' || selectedElement.classList.contains('md-editable'))) {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 selectedElement.focus();

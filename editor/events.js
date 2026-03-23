@@ -103,37 +103,37 @@ function highlightInsertedNodes(nodes) {
     });
 }
 
-// Apply typography to a textarea to match the rendered block type
-function applyBlockTypography(textarea, tagName) {
+// Apply typography to a contenteditable div to match the rendered block type
+function applyBlockTypography(editable, tagName) {
     switch (tagName) {
         case 'H1':
-            textarea.style.fontSize = '2em';
-            textarea.style.lineHeight = '1.2';
-            textarea.style.fontWeight = '600';
+            editable.style.fontSize = '2em';
+            editable.style.lineHeight = '1.2';
+            editable.style.fontWeight = '600';
             break;
         case 'H2':
-            textarea.style.fontSize = '1.5em';
-            textarea.style.lineHeight = '1.3';
-            textarea.style.fontWeight = '600';
+            editable.style.fontSize = '1.5em';
+            editable.style.lineHeight = '1.3';
+            editable.style.fontWeight = '600';
             break;
         case 'H3':
-            textarea.style.fontSize = '1.25em';
-            textarea.style.lineHeight = '1.4';
-            textarea.style.fontWeight = '600';
+            editable.style.fontSize = '1.25em';
+            editable.style.lineHeight = '1.4';
+            editable.style.fontWeight = '600';
             break;
         case 'H4':
         case 'H5':
         case 'H6':
-            textarea.style.fontSize = '1em';
-            textarea.style.lineHeight = '1.4';
-            textarea.style.fontWeight = '600';
+            editable.style.fontSize = '1em';
+            editable.style.lineHeight = '1.4';
+            editable.style.fontWeight = '600';
             break;
         case 'PRE':
-            textarea.style.fontFamily = "'Courier New', Courier, monospace";
-            textarea.style.fontSize = '0.9rem';
-            textarea.style.lineHeight = '1.4';
+            editable.style.fontFamily = "'Courier New', Courier, monospace";
+            editable.style.fontSize = '0.9rem';
+            editable.style.lineHeight = '1.4';
             break;
-        // P, BLOCKQUOTE, UL, OL, TABLE, HR — keep default textarea styles
+        // P, BLOCKQUOTE, UL, OL, TABLE, HR — keep default styles
     }
 }
 
@@ -166,20 +166,28 @@ function dedentMarkdown(markdownText) {
     return lines.map(line => line.substring(Math.min(minIndent, line.length))).join('\n');
 }
 
+/**
+ * Extract plain text from a contenteditable div, preserving line breaks.
+ * Uses innerText which respects visual line breaks from <div>/<br> elements.
+ */
+function getEditableText(el) {
+    if (el.tagName === 'TEXTAREA') return el.value;
+    // innerText preserves line breaks from <div> and <br> elements in contenteditable
+    return el.innerText;
+}
+
 // Function to render markdown to HTML, returns array of inserted nodes
-function renderMarkdownPartial(textarea) {
-    const markdownText = textarea.value;
+// Accepts either a textarea or a contenteditable div
+function renderMarkdownPartial(editableEl) {
+    const markdownText = getEditableText(editableEl);
     const isIndentedList = detectIndentedList(markdownText);
 
-    const parent = textarea.parentNode;
-    const insertBefore = textarea.nextSibling;
+    const parent = editableEl.parentNode;
+    const insertBefore = editableEl.nextSibling;
 
     // Special case: indented list with a preceding list element.
-    // Combine the previous list's markdown with the raw indented markdown from cell 2,
-    // then re-parse the combined result. This lets markdown's own nesting rules handle
-    // arbitrary indent depths correctly.
     if (isIndentedList) {
-        const prevSibling = textarea.previousElementSibling;
+        const prevSibling = editableEl.previousElementSibling;
         if (prevSibling && (prevSibling.tagName === 'UL' || prevSibling.tagName === 'OL')) {
             const prevMarkdown = turndownService.turndown(prevSibling.outerHTML);
             const combinedMarkdown = prevMarkdown + '\n' + markdownText;
@@ -188,10 +196,10 @@ function renderMarkdownPartial(textarea) {
             const temp = document.createElement('div');
             temp.innerHTML = html;
 
-            // Remove the previous list and the textarea
-            const refNode = prevSibling.nextSibling === textarea ? insertBefore : prevSibling.nextSibling;
+            // Remove the previous list and the editable element
+            const refNode = prevSibling.nextSibling === editableEl ? insertBefore : prevSibling.nextSibling;
             prevSibling.remove();
-            textarea.remove();
+            editableEl.remove();
 
             const insertedNodes = [];
             while (temp.firstChild) {
@@ -217,7 +225,7 @@ function renderMarkdownPartial(textarea) {
     const temp = document.createElement('div');
     temp.innerHTML = html;
 
-    textarea.remove();
+    editableEl.remove();
 
     const insertedNodes = [];
     while (temp.firstChild) {
@@ -279,7 +287,7 @@ function findClosestSelectableParent(element) {
 
     let current = element;
     while (current && current !== preview) {
-        if (selectableTypes.includes(current.tagName)) {
+        if (selectableTypes.includes(current.tagName) || (current.classList && current.classList.contains('md-editable'))) {
             return current;
         }
         current = current.parentElement;
@@ -297,7 +305,8 @@ function deselectAll() {
 // Set up click handlers for selectable elements
 function setupSelectionHandlers() {
     // Get all potential selectable elements - focus on block-level elements
-    selectableElements = Array.from(preview.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6, :scope > p, :scope > ul, :scope > ol, :scope > pre, :scope > blockquote, :scope > table, :scope > hr, :scope > textarea'));
+    // Include contenteditable divs (div.md-editable) alongside rendered blocks
+    selectableElements = Array.from(preview.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6, :scope > p, :scope > ul, :scope > ol, :scope > pre, :scope > blockquote, :scope > table, :scope > hr, :scope > textarea, :scope > div.md-editable'));
 
     // Add click event to each element
     selectableElements.forEach((el, index) => {
@@ -431,6 +440,57 @@ function handleShiftEnter(e) {
     renderMarkdownPartial(textarea);
 }
 
+/**
+ * Create a contenteditable div for editing, replacing textarea usage.
+ * Applies syntax highlighting to raw markdown and supports live re-highlighting.
+ */
+function createEditableDiv(markdown, totalHeight, firstTag) {
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    editable.className = 'md-editable';
+    editable.style.width = '100%';
+
+    // Apply block-type typography for minimal layout shift
+    applyBlockTypography(editable, firstTag);
+
+    // Use captured height directly for min-height
+    if (totalHeight > 0) {
+        editable.style.height = totalHeight + 'px';
+        editable.style.minHeight = totalHeight + 'px';
+    }
+
+    // Apply initial syntax highlighting
+    editable.innerHTML = highlightMarkdown(markdown);
+
+    // Track last content to avoid unnecessary re-highlights
+    let lastContent = editable.innerText;
+
+    // Live re-highlighting on input with caret save/restore
+    editable.addEventListener('input', function() {
+        const currentContent = getEditableText(this);
+        if (currentContent === lastContent) return;
+        lastContent = currentContent;
+
+        const offset = saveCaretOffset(this);
+        this.innerHTML = highlightMarkdown(currentContent);
+        restoreCaretOffset(this, offset);
+    });
+
+    // Plain-text-only paste handler — strip HTML formatting
+    editable.addEventListener('paste', function(e) {
+        e.preventDefault();
+        const plainText = e.clipboardData.getData('text/plain');
+        document.execCommand('insertText', false, plainText);
+    });
+
+    // Keyboard event handler for Shift+Enter, Escape, Tab
+    editable.addEventListener('keydown', function(e) {
+        handleEditableEvent(e, editable);
+    });
+
+    return editable;
+}
+
 function handleEnter(e) {
     e.preventDefault();
     pushUndo();
@@ -456,39 +516,25 @@ function handleEnter(e) {
         selectedItems[0].remove();
     }
 
-    // 5. Create a textarea and insert it where the first element was
-    const textarea = document.createElement('textarea');
-    textarea.value = markdown;
-    textarea.style.width = '100%';
-
-    // Match textarea typography to the block type for minimal layout shift
-    applyBlockTypography(textarea, firstTag);
-
-    // Use captured height directly instead of row estimation
-    textarea.style.height = totalHeight + 'px';
-    textarea.style.minHeight = totalHeight + 'px';
-
-    // Auto-resize on input
-    textarea.addEventListener('input', function () {
-        this.style.height = 'auto';
-        this.style.height = this.scrollHeight + 'px';
-    });
+    // 5. Create a contenteditable div instead of textarea
+    const editable = createEditableDiv(markdown, totalHeight, firstTag);
 
     if (insertBefore) {
-        parent.insertBefore(textarea, insertBefore);
+        parent.insertBefore(editable, insertBefore);
     } else {
-        parent.appendChild(textarea);
+        parent.appendChild(editable);
     }
 
-    // set cursor
-    textarea.focus()
+    // set cursor at end of content
+    editable.focus();
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(editable);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
 
-    // Add event listener for Ctrl+Enter
-    textarea.addEventListener('keydown', function(e) {
-        handleTextareaEvent(e, textarea)
-    });
-
-    // make textarea selectable when blurred
+    // make editable div selectable when blurred
     saveIndex = currentSelectedIndex;
     setupSelectionHandlers();
     currentSelectedIndex = saveIndex;
@@ -516,7 +562,7 @@ function insertTextArea(e, insertBefore = true) {
 
     let selectedItems = document.getElementsByClassName('selected');
 
-    // 3. Get parent node and reference for insertion
+    // Get parent node and reference for insertion
     const parent = selectedItems[0].parentNode;
     let newIndex
     let insertElement
@@ -528,37 +574,23 @@ function insertTextArea(e, insertBefore = true) {
         newIndex = currentSelectedIndex + 1
     }
 
-
-    // Create a textarea and insert it above the currently selected element
-    const textarea = document.createElement('textarea');
-    textarea.rows = 1;
-    textarea.style.width = '100%';
-
-    // Auto-resize on input
-    textarea.addEventListener('input', function () {
-        this.style.height = 'auto';
-        this.style.height = this.scrollHeight + 'px';
-    });
+    // Create a contenteditable div (empty, for new content)
+    const editable = createEditableDiv('', 0, '');
 
     // insert
     if (insertElement) {
-        parent.insertBefore(textarea, insertElement);
+        parent.insertBefore(editable, insertElement);
     } else {
-        parent.appendChild(textarea);
+        parent.appendChild(editable);
     }
 
     // Deselect all other elements
     deselectAll();
 
     // set cursor
-    textarea.focus()
+    editable.focus()
 
-    // Add event listener for Ctrl+Enter
-    textarea.addEventListener('keydown', function(e) {
-        handleTextareaEvent(e, textarea);
-    });
-
-    // make textarea selectable when blurred
+    // make editable div selectable when blurred
     setupSelectionHandlers();
     currentSelectedIndex = newIndex
 }
@@ -584,6 +616,34 @@ function selectInsertedNodes(insertedNodes, savedIndex) {
     }
 }
 
+/**
+ * Handle keyboard events inside a contenteditable div (edit mode).
+ * Shift+Enter and Escape exit edit mode and render.
+ * Tab inserts spaces.
+ */
+function handleEditableEvent(e, editable) {
+    if (e.key === 'Enter' && e.shiftKey) {
+        e.preventDefault();
+        pushUndo();
+        const savedIndex = currentSelectedIndex;
+        const insertedNodes = renderMarkdownPartial(editable);
+        selectInsertedNodes(insertedNodes, savedIndex);
+    }
+    else if (e.key === "Escape") {
+        e.preventDefault();
+        pushUndo();
+        const savedIndex = currentSelectedIndex;
+        const insertedNodes = renderMarkdownPartial(editable);
+        selectInsertedNodes(insertedNodes, savedIndex);
+    }
+    else if (e.key === 'Tab') {
+        e.preventDefault();
+        // Insert spaces at cursor position using execCommand
+        document.execCommand('insertText', false, '    ');
+    }
+}
+
+// Keep backward compatibility: handleTextareaEvent still works for any leftover textareas
 function handleTextareaEvent(e, textarea) {
     if (e.key === 'Enter' && e.shiftKey) {
         e.preventDefault();
