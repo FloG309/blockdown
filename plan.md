@@ -151,9 +151,211 @@ All features are interaction-heavy, so **Playwright E2E tests** remain the prima
 
 ---
 
+## Feature 9: CodeMirror 6 styled edit mode
+
+**Problem:** When the user presses Enter to edit a block, the plain `<textarea>` provides zero visual feedback about markdown syntax. Headers, bold, code spans, and list markers all look the same — plain monochrome text. This makes it hard to orient within complex blocks and breaks the visual connection between edit mode and the rendered output.
+
+**Goal:** Replace the plain textarea with a CodeMirror 6 editor instance that provides markdown syntax highlighting and context-aware vertical spacing, so edit mode feels like a styled, semi-rendered view of the markdown source.
+
+---
+
+### 9A: Markdown syntax highlighting in edit mode
+
+When the user presses Enter to edit a block, instead of a plain textarea, they get a CodeMirror 6 editor with full markdown language support:
+
+- **Bold**, *italic*, `code`, headers, links, etc. are styled via CodeMirror's decoration system
+- Uses `@codemirror/lang-markdown` for parsing the markdown syntax tree
+- Custom theme that matches the editor's existing light aesthetic:
+  - Selection color: `#e1f0ff` (matches block selection background)
+  - Font stack: `system-ui, -apple-system, sans-serif` (matches rendered output)
+  - Border style: consistent with existing textarea borders
+  - Background: white, with subtle differentiation for code spans
+
+### 9B: Dynamic vertical spacing via line decorations
+
+CodeMirror's `Decoration` API allows per-line styling based on the syntax tree. This makes the edit mode feel closer to the rendered output without actually rendering HTML:
+
+- **Header lines** get extra `margin-bottom` proportional to heading level (h1 > h2 > h3)
+- **List item lines** get left padding matching rendered `<li>` spacing
+- **Blank lines** get a visible vertical gap (not collapsed)
+- **Fenced code block content** gets monospace font + tighter line-height
+- **Blockquote lines** (starting with `>`) get a left border or indent
+
+This is implemented as a custom `ViewPlugin` that:
+1. Reads the Lezer syntax tree from `@codemirror/lang-markdown`
+2. Maps syntax node types to `Decoration.line()` decorations with appropriate CSS classes
+3. Rebuilds decorations on document changes via the `update()` method
+
+---
+
+### Implementation approach
+
+**CDN loading strategy:**
+
+CodeMirror 6 is ESM-native. Load modules via `esm.sh` or `esm.run` CDN using an import map in `editor.html`:
+
+- `@codemirror/view` — `EditorView`, `ViewPlugin`, `Decoration`, `keymap`
+- `@codemirror/state` — `EditorState`
+- `@codemirror/lang-markdown` — markdown language support + syntax tree
+- `@codemirror/commands` — basic editing keybindings (default keymap)
+- `@lezer/highlight` — syntax highlighting tag system
+- `@codemirror/language` — `syntaxTree` access for the line decoration plugin
+
+Alternative: use a pre-bundled UMD build if ESM dynamic `import()` proves unreliable across browsers.
+
+**New file: `editor/codemirrorSetup.js`**
+
+Exports a single function:
+
+```js
+function createMarkdownEditor(container, initialContent, onExit) → EditorView
+```
+
+Responsibilities:
+- Creates an `EditorView` with:
+  - Markdown language extension (`@codemirror/lang-markdown`)
+  - Custom theme (selection color, font, borders)
+  - Line decoration plugin (Feature 9B)
+  - Custom keybindings:
+    - **Shift+Enter** → exit edit mode, call `onExit(editorText)`
+    - **Escape** → exit edit mode, call `onExit(editorText)`
+    - **Tab** → insert 4 spaces (consistent with current textarea behavior)
+- Returns the `EditorView` instance so the caller can destroy it on exit
+
+**Modifications to `events.js`:**
+
+- `handleEnter()`:
+  - Instead of creating a `<textarea>`, create a `<div class="cm-edit-wrapper">` container
+  - Call `createMarkdownEditor(container, markdownText, onExitCallback)`
+  - The `onExit` callback:
+    1. Extracts the plain text from the CodeMirror editor
+    2. Destroys the CodeMirror instance (`view.destroy()`)
+    3. Calls the existing `renderMarkdownPartial()` pipeline
+  - Set `min-height` on the container to match the rendered block's height (reuse Feature 8 logic)
+
+- `handleTextareaEvent()`:
+  - No longer needed for CodeMirror instances — keybindings are handled internally by CodeMirror
+  - Keep the existing textarea handling as a fallback (in case CodeMirror fails to load)
+
+- `setupSelectionHandlers()`:
+  - Must recognize `.cm-edit-wrapper` divs as valid selectable elements (alongside existing tags)
+
+**Modifications to `renderMarkdownPartial()`:**
+
+- Currently expects a `<textarea>` element. Adapt to also accept a container div + text content:
+  - Accept either a textarea (reads `.value`) or a wrapper div + explicit text string
+  - The DOM replacement logic (inserting parsed nodes, removing the editor element) stays the same
+
+**Custom theme details:**
+
+```js
+EditorView.theme({
+  '&': {
+    fontSize: '1rem',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+    backgroundColor: 'white',
+    border: '2px solid #e1f0ff',
+    borderRadius: '4px',
+  },
+  '&.cm-focused': {
+    outline: 'none',
+    borderColor: '#90c8ff',
+  },
+  '.cm-content': {
+    padding: '0.5em',
+    caretColor: '#333',
+  },
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
+    backgroundColor: '#e1f0ff',
+  },
+  // Syntax token styles
+  '.cm-md-header': { fontWeight: '600', color: '#1a1a1a' },
+  '.cm-md-header-1': { fontSize: '1.8em' },
+  '.cm-md-header-2': { fontSize: '1.4em' },
+  '.cm-md-header-3': { fontSize: '1.2em' },
+  '.cm-md-emphasis': { fontStyle: 'italic' },
+  '.cm-md-strong': { fontWeight: '700' },
+  '.cm-md-code': { fontFamily: 'monospace', backgroundColor: '#f5f5f5', borderRadius: '2px' },
+  '.cm-md-link': { color: '#0366d6', textDecoration: 'underline' },
+  '.cm-md-url': { color: '#999' },
+})
+```
+
+**Line decoration plugin (ViewPlugin):**
+
+```js
+// Pseudocode for the ViewPlugin
+ViewPlugin.fromClass(class {
+  decorations; // DecorationSet
+
+  constructor(view) { this.decorations = this.buildDecorations(view); }
+
+  update(update) {
+    if (update.docChanged || update.viewportChanged) {
+      this.decorations = this.buildDecorations(update.view);
+    }
+  }
+
+  buildDecorations(view) {
+    // Walk syntaxTree(view.state) nodes
+    // For ATXHeading nodes → Decoration.line({ class: 'cm-line-h1' }) etc.
+    // For ListItem nodes → Decoration.line({ class: 'cm-line-li' })
+    // For FencedCode content → Decoration.line({ class: 'cm-line-code' })
+    // For Blockquote → Decoration.line({ class: 'cm-line-blockquote' })
+  }
+}, { decorations: v => v.decorations })
+```
+
+---
+
+### Edge cases
+
+- **CDN loading failure:** If CodeMirror modules fail to load (network issue, CDN down), fall back to the existing plain textarea behavior. Wrap the `import()` in a try/catch; on failure, call the existing textarea creation logic.
+- **`setupSelectionHandlers()` recognition:** The CodeMirror wrapper div must be recognized as a valid block in the selectable elements array. Add `.cm-edit-wrapper` to the selector list alongside `textarea`.
+- **Focus management:** When creating the CodeMirror editor, call `view.focus()` to place the cursor inside it. When exiting, ensure focus returns to the `#preview` container for keyboard navigation.
+- **Undo integration:** CodeMirror 6 has its own internal undo/redo system (Ctrl+Z/Ctrl+Y within the editor). Block-level undo (Feature 5) still captures snapshots before entering and after exiting edit mode. The two systems are independent and do not conflict.
+- **Height management:** Set `min-height` on the `.cm-edit-wrapper` container to match the original rendered block height. CodeMirror auto-sizes vertically by default, so it will grow beyond `min-height` if the content requires it.
+- **Performance:** CodeMirror instances must be destroyed (`view.destroy()`) when exiting edit mode. Do not keep dormant instances alive — they hold references to DOM nodes and event listeners.
+- **Multiple blocks:** When entering edit mode on multiple selected blocks, they are concatenated into a single CodeMirror instance (same as the current textarea behavior). The line decoration plugin handles mixed content (e.g., a heading followed by a paragraph) correctly because it reads the full syntax tree.
+- **Import map browser support:** Import maps are supported in all modern browsers (Chrome 89+, Firefox 108+, Safari 16.4+). For older browsers, the textarea fallback applies.
+
+**Affected files:**
+- **New:** `editor/codemirrorSetup.js` — CodeMirror editor factory, theme, line decoration plugin
+- **Modified:** `editor/events.js` — `handleEnter()`, `handleTextareaEvent()`, `setupSelectionHandlers()`, `renderMarkdownPartial()`
+- **Modified:** `editor/styles.css` — `.cm-edit-wrapper` styles, line decoration CSS classes (`.cm-line-h1`, `.cm-line-li`, `.cm-line-code`, `.cm-line-blockquote`)
+- **Modified:** `editor/editor.html` — import map for CodeMirror CDN modules (or `<script type="module">` with dynamic imports)
+- **Modified:** `editor/base.js` — potentially adjust global keydown handler to ignore events when CodeMirror is focused
+
+---
+
+### Testing — Playwright (Feature 9)
+
+**9A — Syntax highlighting:**
+- Select a block containing a header → press Enter → verify `.cm-editor` exists (not a `<textarea>`)
+- Inside the CodeMirror editor, verify that header text has `.cm-md-header` styling class
+- Verify bold markers (`**text**`) produce `.cm-md-strong` decorated spans
+- Verify code spans (`` `code` ``) produce `.cm-md-code` decorated spans
+- Press Shift+Enter → verify CodeMirror is destroyed and rendered block reappears
+- Press Escape → verify same exit behavior as Shift+Enter
+
+**9B — Line decorations:**
+- Edit a block containing an h1 line → verify the line has `.cm-line-h1` decoration class
+- Edit a block with a fenced code block → verify code lines have `.cm-line-code` class with monospace font
+- Edit a list block → verify list item lines have `.cm-line-li` class
+
+**Integration tests:**
+- Full round-trip: render → Enter (CodeMirror opens) → edit text → Shift+Enter (renders) → verify edited content appears correctly
+- Undo integration: Enter edit mode → edit → exit → Ctrl+Z → verify original content restored
+- CDN fallback: (optional, hard to test) — mock CDN failure → verify textarea is used instead
+- Focus management: Enter edit mode → verify CodeMirror has focus → Escape → verify navigation mode works (arrow keys move selection)
+- Height: Enter edit mode on a tall block → verify `.cm-edit-wrapper` min-height matches original block height
+
+---
+
 ## Implementation order
 
 1. **Feature 7** (syntax highlighting) — smallest scope, no interaction with other features, immediate visual payoff.
 2. **Feature 5** (undo/redo) — foundational; Features 6 depends on it for safe destructive actions.
 3. **Feature 6** (copy/paste) — builds on undo infrastructure.
 4. **Feature 8** (textarea height matching) — polish; improves edit-mode UX with no dependencies on other features.
+5. **Feature 9** (CodeMirror 6 edit mode) — depends on Features 7 and 8 being stable. Feature 8's height-matching logic is reused for the CodeMirror container's min-height. Feature 7's syntax highlighting covers rendered blocks; Feature 9 covers edit-mode highlighting — together they provide syntax coloring in both states. Should be implemented last because it replaces a core interaction (textarea → CodeMirror) and all other features must be solid before changing the edit substrate.
