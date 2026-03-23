@@ -115,6 +115,12 @@ h1 {
     padding: 0;
 }
 
+/* Let highlight.js token colors show through */
+#preview pre code.hljs {
+    background-color: transparent;
+    padding: 0;
+}
+
 #preview blockquote {
     border-left: 4px solid #e5e7eb;
     margin-left: 0;

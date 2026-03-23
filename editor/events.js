@@ -2,6 +2,141 @@
 // ~~~~~~~~~~~~~~~~~~Helper Functions~~~~~~~~~~~~~~~~~~~~~~~
 //----------------------------------------------------------
 
+// Internal block clipboard (array of markdown strings)
+var blockClipboard = [];
+
+// Copy selected blocks to internal clipboard
+function copyBlocks() {
+    const selectedItems = document.querySelectorAll('.selected');
+    if (selectedItems.length === 0) return;
+
+    blockClipboard = [];
+    selectedItems.forEach(el => {
+        blockClipboard.push(turndownService.turndown(el.outerHTML));
+    });
+}
+
+// Cut selected blocks (copy + delete)
+function cutBlocks() {
+    const selectedItems = document.querySelectorAll('.selected');
+    if (selectedItems.length === 0) return;
+
+    pushUndo();
+    copyBlocks();
+
+    // Delete the selected blocks
+    selectedItems.forEach(el => el.remove());
+    setupSelectionHandlers();
+    currentSelectedIndex = Math.min(currentSelectedIndex, selectableElements.length - 1);
+}
+
+// Paste blocks from internal clipboard below current selection
+function pasteBlocks() {
+    if (blockClipboard.length === 0) return;
+
+    pushUndo();
+
+    const preview = document.getElementById('preview');
+    const markdown = blockClipboard.join('\n\n');
+    const html = marked.parse(markdown);
+
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+
+    // Find insertion point: after the last selected element, or at the end
+    let refNode = null;
+    if (currentSelectedIndex >= 0 && currentSelectedIndex < selectableElements.length) {
+        refNode = selectableElements[currentSelectedIndex].nextSibling;
+    }
+
+    const insertedNodes = [];
+    while (temp.firstChild) {
+        const node = temp.firstChild;
+        preview.insertBefore(node, refNode);
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            insertedNodes.push(node);
+        }
+    }
+
+    // Merge adjacent lists
+    const resultNodes = mergeAdjacentLists(insertedNodes, preview);
+
+    // Highlight code blocks
+    highlightInsertedNodes(resultNodes);
+
+    // Rebuild and select pasted blocks
+    setupSelectionHandlers();
+    deselectAll();
+    resultNodes.forEach(node => {
+        if (node.parentNode) node.classList.add('selected');
+    });
+    // Set currentSelectedIndex to the last pasted block
+    const lastNode = resultNodes[resultNodes.length - 1];
+    if (lastNode) {
+        const idx = parseInt(lastNode.getAttribute('data-index'));
+        if (!isNaN(idx)) currentSelectedIndex = idx;
+    }
+}
+
+// Apply syntax highlighting to all code blocks within a container or node list
+function highlightCodeBlocks(container) {
+    const codeBlocks = container.querySelectorAll
+        ? container.querySelectorAll('pre code')
+        : [];
+    codeBlocks.forEach(block => {
+        hljs.highlightElement(block);
+    });
+}
+
+// Highlight code blocks within a list of inserted nodes
+function highlightInsertedNodes(nodes) {
+    nodes.forEach(node => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            if (node.tagName === 'PRE') {
+                const code = node.querySelector('code');
+                if (code) hljs.highlightElement(code);
+            } else {
+                const codeBlocks = node.querySelectorAll('pre code');
+                codeBlocks.forEach(block => hljs.highlightElement(block));
+            }
+        }
+    });
+}
+
+// Apply typography to a textarea to match the rendered block type
+function applyBlockTypography(textarea, tagName) {
+    switch (tagName) {
+        case 'H1':
+            textarea.style.fontSize = '2em';
+            textarea.style.lineHeight = '1.2';
+            textarea.style.fontWeight = '600';
+            break;
+        case 'H2':
+            textarea.style.fontSize = '1.5em';
+            textarea.style.lineHeight = '1.3';
+            textarea.style.fontWeight = '600';
+            break;
+        case 'H3':
+            textarea.style.fontSize = '1.25em';
+            textarea.style.lineHeight = '1.4';
+            textarea.style.fontWeight = '600';
+            break;
+        case 'H4':
+        case 'H5':
+        case 'H6':
+            textarea.style.fontSize = '1em';
+            textarea.style.lineHeight = '1.4';
+            textarea.style.fontWeight = '600';
+            break;
+        case 'PRE':
+            textarea.style.fontFamily = "'Courier New', Courier, monospace";
+            textarea.style.fontSize = '0.9rem';
+            textarea.style.lineHeight = '1.4';
+            break;
+        // P, BLOCKQUOTE, UL, OL, TABLE, HR — keep default textarea styles
+    }
+}
+
 // Detect if markdown text starts with an indented list (sub-list)
 function detectIndentedList(markdownText) {
     const lines = markdownText.split('\n');
@@ -69,6 +204,7 @@ function renderMarkdownPartial(textarea) {
 
             // Still run forward-merge in case the next sibling is also a same-type list
             const resultNodes = mergeAdjacentLists(insertedNodes, parent, false);
+            highlightInsertedNodes(resultNodes);
             setupSelectionHandlers();
             return resultNodes;
         }
@@ -95,6 +231,7 @@ function renderMarkdownPartial(textarea) {
     // Auto-merge adjacent lists (flat merge only in default path)
     const resultNodes = mergeAdjacentLists(insertedNodes, parent, false);
 
+    highlightInsertedNodes(resultNodes);
     setupSelectionHandlers();
     return resultNodes;
 }
@@ -296,6 +433,7 @@ function handleShiftEnter(e) {
 
 function handleEnter(e) {
     e.preventDefault();
+    pushUndo();
     let selectedItems = document.getElementsByClassName('selected');
     // 1. Combine HTML from all selected elements
     let combinedHTML = '';
@@ -308,6 +446,7 @@ function handleEnter(e) {
 
     // 3. Get parent node and reference for insertion
     const parent = selectedItems[0].parentNode;
+    const firstTag = selectedItems[0].tagName;
     const insertBefore = selectedItems[selectedItems.length - 1].nextSibling;
 
     // 4. Remove all selected elements
@@ -320,10 +459,14 @@ function handleEnter(e) {
     // 5. Create a textarea and insert it where the first element was
     const textarea = document.createElement('textarea');
     textarea.value = markdown;
-    const lineHeight = 18;
-    const estimatedRows = Math.round(totalHeight / lineHeight);
-    textarea.rows = estimatedRows;
     textarea.style.width = '100%';
+
+    // Match textarea typography to the block type for minimal layout shift
+    applyBlockTypography(textarea, firstTag);
+
+    // Use captured height directly instead of row estimation
+    textarea.style.height = totalHeight + 'px';
+    textarea.style.minHeight = totalHeight + 'px';
 
     // Auto-resize on input
     textarea.addEventListener('input', function () {
@@ -368,7 +511,8 @@ function handleClick(e) {
 
 function insertTextArea(e, insertBefore = true) {
     e.stopPropagation();
-    e.preventDefault()
+    e.preventDefault();
+    pushUndo();
 
     let selectedItems = document.getElementsByClassName('selected');
 
@@ -443,12 +587,14 @@ function selectInsertedNodes(insertedNodes, savedIndex) {
 function handleTextareaEvent(e, textarea) {
     if (e.key === 'Enter' && e.shiftKey) {
         e.preventDefault();
+        pushUndo();
         const savedIndex = currentSelectedIndex;
         const insertedNodes = renderMarkdownPartial(textarea);
         selectInsertedNodes(insertedNodes, savedIndex);
     }
     else if (e.key === "Escape") {
         e.preventDefault();
+        pushUndo();
         const savedIndex = currentSelectedIndex;
         const insertedNodes = renderMarkdownPartial(textarea);
         selectInsertedNodes(insertedNodes, savedIndex);

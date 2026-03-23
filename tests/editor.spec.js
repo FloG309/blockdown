@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 
 // Helper: wait for editor to fully initialize (markdown rendered into blocks)
 async function waitForEditor(page) {
-  await page.goto('/v2/editor.html');
+  await page.goto('/editor/editor.html');
   // Wait for the preview to contain rendered markdown blocks
   await page.waitForSelector('#preview h2');
 }
@@ -552,5 +552,519 @@ test.describe('Feature 4: Rubber band selection', () => {
     const band = page.locator('#rubber-band');
     const bandVisible = await band.isVisible().catch(() => false);
     expect(bandVisible).toBe(false);
+  });
+});
+
+// =============================================================
+// Feature 7: Syntax highlighting for code blocks
+// =============================================================
+
+test.describe('Feature 7: Syntax highlighting', () => {
+
+  test('code block with language hint gets hljs classes on initial render', async ({ page }) => {
+    await waitForEditor(page);
+
+    // The default markdown has a ```javascript code block
+    const codeEl = page.locator('#preview pre code');
+    await expect(codeEl).toHaveCount(1);
+
+    // hljs should have added the 'hljs' class
+    await expect(codeEl).toHaveClass(/hljs/);
+
+    // Should contain highlighted tokens (spans with hljs- prefixed classes)
+    const tokenCount = await codeEl.locator('span[class^="hljs-"]').count();
+    expect(tokenCount).toBeGreaterThan(0);
+  });
+
+  test('code block re-highlighted after edit and re-render', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Navigate to the pre block
+    const blocks = await getBlocks(page);
+    const count = await blocks.count();
+    let preIndex = -1;
+    for (let i = 0; i < count; i++) {
+      const tag = await blocks.nth(i).evaluate(el => el.tagName);
+      if (tag === 'PRE') {
+        preIndex = i;
+        break;
+      }
+    }
+    expect(preIndex).toBeGreaterThan(-1);
+
+    for (let i = 0; i <= preIndex; i++) {
+      await pressKey(page, 'ArrowDown');
+    }
+
+    // Enter edit mode
+    await pressKey(page, 'Enter');
+    const textarea = page.locator('#preview textarea');
+    await expect(textarea).toBeVisible();
+
+    // Replace with new code
+    await textarea.fill('```python\ndef greet():\n    print("hello")\n```');
+    await page.keyboard.press('Escape');
+
+    // The new code block should have hljs classes
+    const codeEl = page.locator('#preview pre code');
+    await expect(codeEl.first()).toHaveClass(/hljs/);
+    const tokenCount = await codeEl.first().locator('span[class^="hljs-"]').count();
+    expect(tokenCount).toBeGreaterThan(0);
+  });
+
+  test('code block without language hint still gets auto-highlighted', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select first block, insert a code block without language hint
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'b');
+    const textarea = page.locator('#preview textarea');
+    await textarea.fill('```\nconst x = 42;\nconsole.log(x);\n```');
+    await page.keyboard.press('Shift+Enter');
+
+    // Should still have hljs class (auto-detection)
+    const codeEls = page.locator('#preview pre code');
+    const lastCode = codeEls.last();
+    await expect(lastCode).toHaveClass(/hljs/);
+  });
+});
+
+// =============================================================
+// Feature 5: Undo / Redo
+// =============================================================
+
+test.describe('Feature 5: Undo / Redo', () => {
+
+  test('undo restores a deleted block', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Get initial block count
+    const blocks = await getBlocks(page);
+    const initialCount = await blocks.count();
+
+    // Select the first block
+    await pressKey(page, 'ArrowDown');
+    const firstBlockText = await blocks.first().innerText();
+
+    // Delete with dd
+    await pressKey(page, 'd');
+    await pressKey(page, 'd');
+
+    // Block count should decrease
+    const afterDeleteCount = await (await getBlocks(page)).count();
+    expect(afterDeleteCount).toBe(initialCount - 1);
+
+    // Undo
+    await page.keyboard.press('Control+z');
+
+    // Block count should be restored
+    const afterUndoCount = await (await getBlocks(page)).count();
+    expect(afterUndoCount).toBe(initialCount);
+
+    // The first block text should be back
+    const restoredBlocks = await getBlocks(page);
+    await expect(restoredBlocks.first()).toContainText(firstBlockText);
+  });
+
+  test('undo restores content after edit', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select second block (paragraph)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    const originalText = await (await getBlocks(page)).nth(1).innerText();
+
+    // Enter edit mode, change text, render
+    await pressKey(page, 'Enter');
+    const textarea = page.locator('#preview textarea');
+    await textarea.fill('Completely changed text');
+    await page.keyboard.press('Escape');
+
+    // Verify the edit took effect
+    const selectedBlock = page.locator('#preview .selected');
+    await expect(selectedBlock).toContainText('Completely changed text');
+
+    // Undo the render
+    await page.keyboard.press('Control+z');
+
+    // Should now have a textarea (back to edit mode state)
+    // Undo again to restore original rendered content
+    await page.keyboard.press('Control+z');
+
+    // Original text should be back
+    const blocks = await getBlocks(page);
+    await expect(blocks.nth(1)).toContainText(originalText);
+  });
+
+  test('redo reapplies after undo', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select first block and delete
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'd');
+    await pressKey(page, 'd');
+
+    const blocks = await getBlocks(page);
+    const afterDeleteCount = await blocks.count();
+
+    // Undo
+    await page.keyboard.press('Control+z');
+    const afterUndoCount = await (await getBlocks(page)).count();
+    expect(afterUndoCount).toBe(afterDeleteCount + 1);
+
+    // Redo
+    await page.keyboard.press('Control+Shift+z');
+    const afterRedoCount = await (await getBlocks(page)).count();
+    expect(afterRedoCount).toBe(afterDeleteCount);
+  });
+
+  test('redo stack clears after a new action', async ({ page }) => {
+    await waitForEditor(page);
+
+    const initialCount = await (await getBlocks(page)).count();
+
+    // Select and delete first block
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'd');
+    await pressKey(page, 'd');
+
+    // Undo
+    await page.keyboard.press('Control+z');
+    expect(await (await getBlocks(page)).count()).toBe(initialCount);
+
+    // Perform a new action (insert textarea)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'b');
+    const textarea = page.locator('#preview textarea');
+    await textarea.fill('new block');
+    await page.keyboard.press('Escape');
+
+    // Redo should do nothing (stack cleared by new action)
+    const countBeforeRedo = await (await getBlocks(page)).count();
+    await page.keyboard.press('Control+Shift+z');
+    const countAfterRedo = await (await getBlocks(page)).count();
+    expect(countAfterRedo).toBe(countBeforeRedo);
+  });
+
+  test('multiple undos in sequence', async ({ page }) => {
+    await waitForEditor(page);
+
+    const initialCount = await (await getBlocks(page)).count();
+
+    // Select first block
+    await pressKey(page, 'ArrowDown');
+
+    // Insert a textarea and render
+    await pressKey(page, 'b');
+    let textarea = page.locator('#preview textarea');
+    await textarea.fill('Block A');
+    await page.keyboard.press('Escape');
+
+    const afterFirstInsert = await (await getBlocks(page)).count();
+    expect(afterFirstInsert).toBe(initialCount + 1);
+
+    // Insert another textarea and render
+    await pressKey(page, 'b');
+    textarea = page.locator('#preview textarea');
+    await textarea.fill('Block B');
+    await page.keyboard.press('Escape');
+
+    const afterSecondInsert = await (await getBlocks(page)).count();
+    expect(afterSecondInsert).toBe(initialCount + 2);
+
+    // Undo twice to get back to after first insert (undo render, undo insert)
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
+
+    // Undo twice more to get back to initial state (undo first render, undo first insert)
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
+
+    const finalCount = await (await getBlocks(page)).count();
+    expect(finalCount).toBe(initialCount);
+  });
+});
+
+// =============================================================
+// Feature 6: Copy / Paste / Cut blocks (C / V / X)
+// =============================================================
+
+test.describe('Feature 6: Copy / Paste / Cut blocks', () => {
+
+  test('C copies and V pastes a block below selection', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the first block (h2)
+    await pressKey(page, 'ArrowDown');
+    const blocks = await getBlocks(page);
+    const initialCount = await blocks.count();
+    const firstBlockText = await blocks.first().innerText();
+
+    // Copy
+    await pressKey(page, 'c');
+
+    // Navigate down and paste
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'v');
+
+    // Should have one more block
+    const newBlocks = await getBlocks(page);
+    const newCount = await newBlocks.count();
+    expect(newCount).toBe(initialCount + 1);
+
+    // The pasted block should contain the same text
+    const pastedBlock = page.locator('#preview .selected');
+    await expect(pastedBlock).toContainText(firstBlockText);
+  });
+
+  test('multi-block select, C copies all, V pastes all', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select first two blocks with Shift+ArrowDown
+    await pressKey(page, 'ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+
+    const selectedCount = await page.locator('#preview .selected').count();
+    expect(selectedCount).toBe(2);
+
+    // Copy
+    await pressKey(page, 'c');
+
+    // Navigate to end and paste
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'v');
+
+    // Should have 2 more blocks
+    const blocks = await getBlocks(page);
+    const count = await blocks.count();
+    // We started with some blocks, added 2
+    expect(count).toBeGreaterThanOrEqual(selectedCount + 2);
+  });
+
+  test('X cuts blocks — originals removed, V pastes them back', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    const initialCount = await blocks.count();
+
+    // Select first block
+    await pressKey(page, 'ArrowDown');
+    const firstBlockText = await blocks.first().innerText();
+
+    // Cut
+    await pressKey(page, 'x');
+
+    // One block removed
+    const afterCutCount = await (await getBlocks(page)).count();
+    expect(afterCutCount).toBe(initialCount - 1);
+
+    // Paste — should add it back
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'v');
+
+    const afterPasteCount = await (await getBlocks(page)).count();
+    expect(afterPasteCount).toBe(initialCount);
+
+    // Pasted block should have the original text
+    const pastedBlock = page.locator('#preview .selected');
+    await expect(pastedBlock).toContainText(firstBlockText);
+  });
+
+  test('V with empty clipboard does nothing', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    const initialCount = await blocks.count();
+
+    // Select a block and press V without having copied anything
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'v');
+
+    const afterPasteCount = await (await getBlocks(page)).count();
+    expect(afterPasteCount).toBe(initialCount);
+  });
+
+  test('pasting list block adjacent to list triggers auto-merge', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Navigate to the UL
+    const blocks = await getBlocks(page);
+    const count = await blocks.count();
+    let ulIndex = -1;
+    for (let i = 0; i < count; i++) {
+      const tag = await blocks.nth(i).evaluate(el => el.tagName);
+      if (tag === 'UL') {
+        ulIndex = i;
+        break;
+      }
+    }
+    expect(ulIndex).toBeGreaterThan(-1);
+
+    for (let i = 0; i <= ulIndex; i++) {
+      await pressKey(page, 'ArrowDown');
+    }
+
+    // Copy the list
+    await pressKey(page, 'c');
+
+    // Paste immediately after — should merge
+    await pressKey(page, 'v');
+
+    // Should still be only 1 UL (merged)
+    const ulCount = await page.locator('#preview > ul').count();
+    expect(ulCount).toBe(1);
+  });
+});
+
+// =============================================================
+// Feature 8: Textarea height matching on edit mode entry
+// =============================================================
+
+test.describe('Feature 8: Textarea height matching', () => {
+
+  test('textarea min-height matches rendered block height', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the first block (h2)
+    await pressKey(page, 'ArrowDown');
+    const blocks = await getBlocks(page);
+    const firstBlock = blocks.first();
+
+    // Capture the rendered block height
+    const renderedHeight = await firstBlock.evaluate(el => el.offsetHeight);
+
+    // Enter edit mode
+    await pressKey(page, 'Enter');
+    const textarea = page.locator('#preview textarea');
+    await expect(textarea).toBeVisible();
+
+    // Textarea min-height should match the rendered block height
+    const minHeight = await textarea.evaluate(el => parseFloat(el.style.minHeight));
+    expect(minHeight).toBe(renderedHeight);
+  });
+
+  test('h2 textarea gets larger font-size than paragraph textarea', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the h2 block and enter edit mode
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+
+    const textarea = page.locator('#preview textarea');
+    const h2FontSize = await textarea.evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+
+    // Exit edit mode
+    await page.keyboard.press('Escape');
+
+    // Navigate to a paragraph block
+    const blocks = await getBlocks(page);
+    const count = await blocks.count();
+    let pIndex = -1;
+    for (let i = 0; i < count; i++) {
+      const tag = await blocks.nth(i).evaluate(el => el.tagName);
+      if (tag === 'P') {
+        pIndex = i;
+        break;
+      }
+    }
+    expect(pIndex).toBeGreaterThan(-1);
+
+    // Navigate to it
+    for (let i = 0; i <= pIndex; i++) {
+      await pressKey(page, 'ArrowDown');
+    }
+    // Deselect previous and select only this one
+    // (ArrowDown from -1 goes to 0, so we need pIndex+1 presses from start)
+    // Actually we already exited edit mode and navigated, let's just enter edit
+    await pressKey(page, 'Enter');
+
+    const pTextarea = page.locator('#preview textarea');
+    const pFontSize = await pTextarea.evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+
+    // h2 font should be larger than paragraph font
+    expect(h2FontSize).toBeGreaterThan(pFontSize);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('code block textarea gets monospace font', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Navigate to the pre block
+    const blocks = await getBlocks(page);
+    const count = await blocks.count();
+    let preIndex = -1;
+    for (let i = 0; i < count; i++) {
+      const tag = await blocks.nth(i).evaluate(el => el.tagName);
+      if (tag === 'PRE') {
+        preIndex = i;
+        break;
+      }
+    }
+    expect(preIndex).toBeGreaterThan(-1);
+
+    for (let i = 0; i <= preIndex; i++) {
+      await pressKey(page, 'ArrowDown');
+    }
+
+    await pressKey(page, 'Enter');
+    const textarea = page.locator('#preview textarea');
+    const fontFamily = await textarea.evaluate(el => getComputedStyle(el).fontFamily);
+
+    // Should contain a monospace font
+    expect(fontFamily).toMatch(/courier|monospace/i);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('textarea does not dramatically change page layout on enter', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select a paragraph block
+    const blocks = await getBlocks(page);
+    const count = await blocks.count();
+    let pIndex = -1;
+    for (let i = 0; i < count; i++) {
+      const tag = await blocks.nth(i).evaluate(el => el.tagName);
+      if (tag === 'P') {
+        pIndex = i;
+        break;
+      }
+    }
+    expect(pIndex).toBeGreaterThan(-1);
+
+    for (let i = 0; i <= pIndex; i++) {
+      await pressKey(page, 'ArrowDown');
+    }
+
+    // Get position of the block after the paragraph (to measure layout shift)
+    const nextIndex = pIndex + 1;
+    let nextBlockTopBefore = null;
+    if (nextIndex < count) {
+      nextBlockTopBefore = await blocks.nth(nextIndex).evaluate(el => el.getBoundingClientRect().top);
+    }
+
+    // Enter edit mode
+    await pressKey(page, 'Enter');
+
+    // If there was a next block, its position shouldn't have shifted more than 50px
+    if (nextBlockTopBefore !== null && nextIndex < count) {
+      const newBlocks = await getBlocks(page);
+      // The next block index may have shifted by 1 because textarea replaced the paragraph
+      // Find the first non-textarea block after the textarea
+      const textareaEl = page.locator('#preview textarea');
+      const nextSiblingTop = await textareaEl.evaluate(el => {
+        let next = el.nextElementSibling;
+        return next ? next.getBoundingClientRect().top : null;
+      });
+
+      if (nextSiblingTop !== null) {
+        const shift = Math.abs(nextSiblingTop - nextBlockTopBefore);
+        expect(shift).toBeLessThan(50);
+      }
+    }
+
+    await page.keyboard.press('Escape');
   });
 });

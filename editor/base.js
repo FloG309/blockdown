@@ -56,6 +56,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const html = marked.parse(markdownText);
         preview.innerHTML = html;
 
+        // Apply syntax highlighting to code blocks
+        highlightCodeBlocks(preview);
+
         // After rendering, set up click handlers for all elements
         setupSelectionHandlers();
     }
@@ -69,6 +72,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const isTextarea = e.target.tagName === 'TEXTAREA';
         const isInput = e.target.tagName === 'INPUT' || e.target.isContentEditable;
 
+        // Handle undo/redo (works everywhere, including textareas)
+        if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+            e.preventDefault();
+            undo();
+            return;
+        }
+        if (e.ctrlKey && (e.key === 'y' || (e.key === 'z' && e.shiftKey)) || (e.ctrlKey && e.shiftKey && e.key === 'Z')) {
+            e.preventDefault();
+            redo();
+            return;
+        }
+
         // Handle keys for form inputs form inputs
         if (isTextarea || isInput) return;
 
@@ -78,6 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (lastKey === 'd' && (now - lastKeyTime) < 1000) {  // 400ms threshold
                 // Double 'd' detected — perform delete
                 console.log('Double D pressed: delete triggered!');
+                pushUndo();
                 const selectedElements = document.querySelectorAll('.selected');
                 selectedElements.forEach(el => el.remove());
                 lastKey = null;  // reset
@@ -123,6 +139,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         else if (e.key === 'b') {
             insertTextArea(e, insertBefore = false)
+        }
+        else if (e.key === 'c') {
+            copyBlocks();
+        }
+        else if (e.key === 'v') {
+            pasteBlocks();
+        }
+        else if (e.key === 'x') {
+            cutBlocks();
         }
     });
 
