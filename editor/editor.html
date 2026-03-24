@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lightweight Markdown Editor</title>
+    <link rel="stylesheet" href="styles.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    <script src="https://unpkg.com/turndown/dist/turndown.js"></script>
+    <script src="undo.js"></script>
+    <script src="events.js"></script>
+    <script src="rubberband.js"></script>
+    <script src="base.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div id="preview-container">
+            <div id="preview">
+                <p>Press <strong>Ctrl+Enter</strong> to render your markdown.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

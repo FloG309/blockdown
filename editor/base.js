@@ -1,0 +1,131 @@
+var selectableElements = [];
+var currentSelectedIndex = -1;
+var turndownService = new TurndownService();
+
+let markdownText = `
+## Welcome to the Markdown Editor
+
+This is a *lightweight* editor that renders **Markdown** on demand.
+
+### Features:
+- Press **Ctrl+Enter** to render the markdown
+- Simple and fast interface
+- Live preview updates when you press the shortcut
+
+#### Code Example
+\`\`\`javascript
+function hello() {
+    console.log("Hello, Markdown!");
+}
+\`\`\`
+
+> Press Ctrl+Enter to see the rendered markdown.
+`
+
+turndownService.addRule('fencedCodeBlock', {
+    filter: function (node, options) {
+        return (
+        options.codeBlockStyle === 'fenced' &&
+        node.nodeName === 'PRE' &&
+        node.firstChild &&
+        node.firstChild.nodeName === 'CODE'
+        );
+    },
+    replacement: function (content, node, options) {
+        const code = node.firstChild;
+        const className = code.getAttribute('class') || '';
+        const language = className.match(/language-(\w+)/) ? className.match(/language-(\w+)/)[1] : '';
+
+        const fence = options.fence;
+        const codeContent = code.textContent || '';
+
+        return '\n\n' + fence + language + '\n' + codeContent + '\n' + fence + '\n\n';
+    }
+});
+
+// Ensure fenced code block style is used
+turndownService.options.codeBlockStyle = 'fenced';
+// Use dashes for bullet lists (classic markdown style)
+turndownService.options.bulletListMarker = '-';
+
+document.addEventListener('DOMContentLoaded', function() {
+    const preview = document.getElementById('preview');
+
+    // Function to render markdown to HTML
+    function renderMarkdown() {
+        const html = marked.parse(markdownText);
+        preview.innerHTML = html;
+
+        // After rendering, set up click handlers for all elements
+        setupSelectionHandlers();
+    }
+
+
+    // Handle keyboard navigation for marking several cells (shift + arrow)
+    let lastKey = null;
+    let lastKeyTime = 0;
+    document.addEventListener('keydown', function(e) {
+        const now = Date.now();
+        const isTextarea = e.target.tagName === 'TEXTAREA';
+        const isInput = e.target.tagName === 'INPUT' || e.target.isContentEditable;
+
+        // Handle keys for form inputs form inputs
+        if (isTextarea || isInput) return;
+
+        // Handle delete option
+
+        if (e.key === 'd') {
+            if (lastKey === 'd' && (now - lastKeyTime) < 1000) {  // 400ms threshold
+                // Double 'd' detected — perform delete
+                console.log('Double D pressed: delete triggered!');
+                const selectedElements = document.querySelectorAll('.selected');
+                selectedElements.forEach(el => el.remove());
+                lastKey = null;  // reset
+            } else {
+                lastKey = 'd';
+                lastKeyTime = now;
+            }
+        } else {
+            // Reset if a different key is pressed
+            lastKey = null;
+        }
+
+        //handle special case where textarea is selected, but not focused (== no active cursor)
+        const selectedElement = selectableElements[currentSelectedIndex]
+        if (selectedElement && selectedElement.tagName === 'TEXTAREA') {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                selectedElement.focus();
+                selectedElement.classList.remove('selected');
+                return;
+            }
+        }
+
+        // Only handle if Ctrl key is pressed
+        if (e.shiftKey) {
+            if (e.key === 'ArrowUp') {
+                handleShiftArrowUp(e)
+            } else if (e.key === 'ArrowDown') {
+                handleShiftArrowDown(e)
+            }
+        }
+        else if (e.key === 'ArrowUp') {
+            handleArrowUp(e)
+        }
+        else if (e.key === 'ArrowDown') {
+            handleArrowDown(e)
+        }
+        else if (e.key === 'Enter') {
+            handleEnter(e)
+        }
+        else if (e.key === 'a') {
+            insertTextArea(e, insertBefore = true)
+        }
+        else if (e.key === 'b') {
+            insertTextArea(e, insertBefore = false)
+        }
+    });
+
+    // Initial render
+    renderMarkdown();
+});
