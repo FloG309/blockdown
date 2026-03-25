@@ -2,23 +2,56 @@ const { test, expect } = require('@playwright/test');
 
 // Helper: wait for editor to fully initialize (markdown rendered into blocks)
 async function waitForEditor(page) {
-  await page.goto('/v2/editor.html');
+  await page.goto('/editor/editor.html');
   // Wait for the preview to contain rendered markdown blocks
   await page.waitForSelector('#preview h2');
+  // Verify CodeMirror bundle loaded (synchronous script, should be ready immediately)
+  await page.waitForFunction(() => window.CM && window.CM.ready, { timeout: 5000 });
 }
 
 // Helper: get all selectable block elements
 async function getBlocks(page) {
-  return page.locator('#preview > h1, #preview > h2, #preview > h3, #preview > h4, #preview > h5, #preview > h6, #preview > p, #preview > ul, #preview > ol, #preview > pre, #preview > blockquote, #preview > table, #preview > hr, #preview > textarea');
+  return page.locator('#preview > h1, #preview > h2, #preview > h3, #preview > h4, #preview > h5, #preview > h6, #preview > p, #preview > ul, #preview > ol, #preview > pre, #preview > blockquote, #preview > table, #preview > hr, #preview > textarea, #preview > .cm-wrapper');
 }
 
-// Helper: press a key on the page body (not inside a textarea)
+// Helper: press a key on the page body (not inside an editor)
 async function pressKey(page, key) {
   await page.keyboard.press(key);
 }
 
+// Helper: wait for edit mode to appear (CM editor)
+async function waitForEditMode(page) {
+  await page.waitForSelector('#preview .cm-wrapper .cm-editor', { timeout: 5000 });
+}
+
+// Helper: set text content in the CM editor (replaces all content programmatically)
+async function typeInEditor(page, text) {
+  await page.evaluate((newText) => {
+    const wrapper = document.querySelector('#preview .cm-wrapper');
+    if (wrapper && wrapper._cmView) {
+      const view = wrapper._cmView;
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: newText }
+      });
+    }
+  }, text);
+}
+
+// Helper: get text from the CM editor
+async function getEditorText(page) {
+  return page.evaluate(() => {
+    const wrapper = document.querySelector('#preview .cm-wrapper');
+    if (wrapper && wrapper._cmView) {
+      return wrapper._cmView.state.doc.toString();
+    }
+    const textarea = document.querySelector('#preview textarea');
+    if (textarea) return textarea.value;
+    return '';
+  });
+}
+
 // =============================================================
-// Feature 1+3: Escape renders textarea and restores selection
+// Feature 1+3: Escape renders editor and restores selection
 // =============================================================
 
 test.describe('Feature 1+3: Escape renders and restores selection', () => {
@@ -31,26 +64,27 @@ test.describe('Feature 1+3: Escape renders and restores selection', () => {
     const blocks = await getBlocks(page);
     await expect(blocks.first()).toHaveClass(/selected/);
 
-    // Press Enter to open textarea for editing
+    // Press Enter to open editor for editing
     await pressKey(page, 'Enter');
 
-    // A textarea should now exist
-    const textarea = page.locator('#preview textarea');
-    await expect(textarea).toBeVisible();
+    // A CM editor should now exist
+    await waitForEditMode(page);
 
     // Press Escape to exit editing
     await page.keyboard.press('Escape');
 
-    // Textarea should be gone
+    // Editor should be gone
+    await expect(page.locator('#preview .cm-wrapper')).toHaveCount(0);
     await expect(page.locator('#preview textarea')).toHaveCount(0);
 
     // The rendered block should be back and selected
     const newBlocks = await getBlocks(page);
     const firstBlock = newBlocks.first();
     await expect(firstBlock).toHaveClass(/selected/);
-    // It should be a rendered element, not a textarea
+    // It should be a rendered element, not an editor
     const tagName = await firstBlock.evaluate(el => el.tagName);
     expect(tagName).not.toBe('TEXTAREA');
+    expect(tagName).not.toBe('DIV'); // not a cm-wrapper
   });
 
   test('Shift+Enter renders and keeps block selected', async ({ page }) => {
@@ -62,14 +96,13 @@ test.describe('Feature 1+3: Escape renders and restores selection', () => {
 
     // Enter edit mode
     await pressKey(page, 'Enter');
-    const textarea = page.locator('#preview textarea');
-    await expect(textarea).toBeVisible();
+    await waitForEditMode(page);
 
     // Shift+Enter to render
     await page.keyboard.press('Shift+Enter');
 
-    // Textarea should be gone
-    await expect(page.locator('#preview textarea')).toHaveCount(0);
+    // Editor should be gone
+    await expect(page.locator('#preview .cm-wrapper')).toHaveCount(0);
 
     // The rendered block should be selected
     const selectedBlock = page.locator('#preview .selected');
@@ -87,17 +120,16 @@ test.describe('Feature 1+3: Escape renders and restores selection', () => {
 
     // Enter edit mode
     await pressKey(page, 'Enter');
-    const textarea = page.locator('#preview textarea');
-    await expect(textarea).toBeVisible();
+    await waitForEditMode(page);
 
     // Clear and type new content
-    await textarea.fill('This is **edited** content.');
+    await typeInEditor(page, 'This is **edited** content.');
 
     // Escape to render and select
     await page.keyboard.press('Escape');
 
-    // Should be rendered HTML, not textarea
-    await expect(page.locator('#preview textarea')).toHaveCount(0);
+    // Should be rendered HTML, not editor
+    await expect(page.locator('#preview .cm-wrapper')).toHaveCount(0);
 
     // The rendered block should contain the edited text
     const selectedBlock = page.locator('#preview .selected');
@@ -118,8 +150,6 @@ test.describe('Feature 2: Auto-merge adjacent lists', () => {
     const blocks = await getBlocks(page);
     const count = await blocks.count();
 
-    // Navigate to the UL (it's the list of features)
-    // Navigate down to find the ul
     let ulIndex = -1;
     for (let i = 0; i < count; i++) {
       const tag = await blocks.nth(i).evaluate(el => el.tagName);
@@ -138,13 +168,12 @@ test.describe('Feature 2: Auto-merge adjacent lists', () => {
     // Count original li items
     const originalLiCount = await page.locator('#preview > ul').first().locator('li').count();
 
-    // Press 'b' to insert textarea after the list
+    // Press 'b' to insert editor after the list
     await pressKey(page, 'b');
-    const textarea = page.locator('#preview textarea');
-    await expect(textarea).toBeVisible();
+    await waitForEditMode(page);
 
-    // Type a new list item
-    await textarea.fill('- new item from test\n- another test item');
+    // Type new list items
+    await typeInEditor(page, '- new item from test\n- another test item');
 
     // Shift+Enter to render
     await page.keyboard.press('Shift+Enter');
@@ -178,16 +207,15 @@ test.describe('Feature 2: Auto-merge adjacent lists', () => {
       await pressKey(page, 'ArrowDown');
     }
 
-    // Insert textarea after
+    // Insert editor after
     await pressKey(page, 'b');
-    const textarea = page.locator('#preview textarea');
-    await textarea.fill('Just a plain paragraph.');
+    await waitForEditMode(page);
+    await typeInEditor(page, 'Just a plain paragraph.');
     await page.keyboard.press('Shift+Enter');
 
     // The paragraph should be its own block, not merged
     const ulCount = await page.locator('#preview > ul').count();
     expect(ulCount).toBeGreaterThanOrEqual(1);
-    // A new <p> should exist after the ul
     const pBlocks = await page.locator('#preview > p').count();
     expect(pBlocks).toBeGreaterThanOrEqual(1);
   });
@@ -221,10 +249,9 @@ test.describe('Bullet marker uses dashes', () => {
 
     // Enter edit mode to get the markdown
     await pressKey(page, 'Enter');
-    const textarea = page.locator('#preview textarea');
-    await expect(textarea).toBeVisible();
+    await waitForEditMode(page);
 
-    const value = await textarea.inputValue();
+    const value = await getEditorText(page);
     // Should use dashes, not asterisks
     expect(value).toMatch(/^- /m);
     expect(value).not.toMatch(/^\* /m);
@@ -259,72 +286,65 @@ test.describe('Sub-list merging', () => {
     return ulIndex;
   }
 
-  // Example: cell1="- xxx\n- yyy", cell2="    - zzz" → zzz becomes sub-item of yyy
   test('indented list merges as sub-list of last item in preceding list', async ({ page }) => {
     await waitForEditor(page);
     await navigateToUl(page);
 
     // Enter edit mode to replace the list with a known structure
     await pressKey(page, 'Enter');
-    let textarea = page.locator('#preview textarea');
-    await textarea.fill('- xxx\n- yyy');
+    await waitForEditMode(page);
+    await typeInEditor(page, '- xxx\n- yyy');
     await page.keyboard.press('Shift+Enter');
 
-    // Insert textarea after the list and add indented sub-list (4 spaces = 1 level)
+    // Insert editor after the list and add indented sub-list
     await pressKey(page, 'b');
-    textarea = page.locator('#preview textarea');
-    await textarea.fill('    - zzz');
+    await waitForEditMode(page);
+    await typeInEditor(page, '    - zzz');
     await page.keyboard.press('Shift+Enter');
 
     // Should be 1 top-level UL
     expect(await page.locator('#preview > ul').count()).toBe(1);
 
-    // zzz should be nested inside last li (yyy): ul > li:last-child > ul > li
+    // zzz should be nested inside last li (yyy)
     const nestedUl = page.locator('#preview > ul').first().locator(':scope > li:last-child > ul');
     await expect(nestedUl).toHaveCount(1);
     await expect(nestedUl.locator('li')).toHaveText(['zzz']);
   });
 
-  // Example: cell1="- xxx\n- yyy", cell2="        - zzz" → zzz nested 2 levels under yyy
   test('double-indented list merges at level 2 under last item', async ({ page }) => {
     await waitForEditor(page);
     await navigateToUl(page);
 
     await pressKey(page, 'Enter');
-    let textarea = page.locator('#preview textarea');
-    await textarea.fill('- xxx\n- yyy');
+    await waitForEditMode(page);
+    await typeInEditor(page, '- xxx\n- yyy');
     await page.keyboard.press('Shift+Enter');
 
     await pressKey(page, 'b');
-    textarea = page.locator('#preview textarea');
-    // 8 spaces = 2 levels of indent
-    await textarea.fill('        - zzz');
+    await waitForEditMode(page);
+    await typeInEditor(page, '        - zzz');
     await page.keyboard.press('Shift+Enter');
 
     expect(await page.locator('#preview > ul').count()).toBe(1);
-
-    // zzz should be nested under yyy
     await expect(page.locator('#preview > ul').first().locator(':scope > li:last-child')).toContainText('zzz');
   });
 
-  // Example: cell1="- xxx\n    - yyy", cell2="    - zzz" → zzz is sibling of yyy
   test('indented list merges as sibling when preceding list has same-level sub-items', async ({ page }) => {
     await waitForEditor(page);
     await navigateToUl(page);
 
     await pressKey(page, 'Enter');
-    let textarea = page.locator('#preview textarea');
-    await textarea.fill('- xxx\n    - yyy');
+    await waitForEditMode(page);
+    await typeInEditor(page, '- xxx\n    - yyy');
     await page.keyboard.press('Shift+Enter');
 
     await pressKey(page, 'b');
-    textarea = page.locator('#preview textarea');
-    await textarea.fill('    - zzz');
+    await waitForEditMode(page);
+    await typeInEditor(page, '    - zzz');
     await page.keyboard.press('Shift+Enter');
 
     expect(await page.locator('#preview > ul').count()).toBe(1);
 
-    // yyy and zzz should be siblings in the nested list under xxx
     const nestedLis = page.locator('#preview > ul').first()
       .locator(':scope > li:first-child > ul > li');
     await expect(nestedLis).toHaveCount(2);
@@ -332,24 +352,22 @@ test.describe('Sub-list merging', () => {
     await expect(nestedLis.nth(1)).toHaveText('zzz');
   });
 
-  // Example: cell1="- xxx\n    - yyy", cell2="        - zzz" → zzz is sub-item of yyy
   test('double-indented list nests under existing sub-list item', async ({ page }) => {
     await waitForEditor(page);
     await navigateToUl(page);
 
     await pressKey(page, 'Enter');
-    let textarea = page.locator('#preview textarea');
-    await textarea.fill('- xxx\n    - yyy');
+    await waitForEditMode(page);
+    await typeInEditor(page, '- xxx\n    - yyy');
     await page.keyboard.press('Shift+Enter');
 
     await pressKey(page, 'b');
-    textarea = page.locator('#preview textarea');
-    await textarea.fill('        - zzz');
+    await waitForEditMode(page);
+    await typeInEditor(page, '        - zzz');
     await page.keyboard.press('Shift+Enter');
 
     expect(await page.locator('#preview > ul').count()).toBe(1);
 
-    // zzz should be nested under yyy: ul > li(xxx) > ul > li(yyy) > ul > li(zzz)
     const deepNested = page.locator('#preview > ul').first()
       .locator(':scope > li:first-child > ul > li:last-child > ul > li');
     await expect(deepNested).toHaveCount(1);
@@ -363,7 +381,6 @@ test.describe('Sub-list merging', () => {
 
 test.describe('Selection after list merge', () => {
 
-  // Helper: navigate to the first UL block
   async function navigateToUl(page) {
     const blocks = await getBlocks(page);
     const count = await blocks.count();
@@ -385,8 +402,8 @@ test.describe('Selection after list merge', () => {
     await navigateToUl(page);
 
     await pressKey(page, 'b');
-    const textarea = page.locator('#preview textarea');
-    await textarea.fill('- merged item');
+    await waitForEditMode(page);
+    await typeInEditor(page, '- merged item');
     await page.keyboard.press('Shift+Enter');
 
     const selected = page.locator('#preview .selected');
@@ -400,8 +417,8 @@ test.describe('Selection after list merge', () => {
     await navigateToUl(page);
 
     await pressKey(page, 'b');
-    const textarea = page.locator('#preview textarea');
-    await textarea.fill('    - sub item');
+    await waitForEditMode(page);
+    await typeInEditor(page, '    - sub item');
     await page.keyboard.press('Shift+Enter');
 
     const selected = page.locator('#preview .selected');
@@ -415,8 +432,8 @@ test.describe('Selection after list merge', () => {
     await navigateToUl(page);
 
     await pressKey(page, 'b');
-    const textarea = page.locator('#preview textarea');
-    await textarea.fill('    - sub item');
+    await waitForEditMode(page);
+    await typeInEditor(page, '    - sub item');
     await page.keyboard.press('Shift+Enter');
 
     await pressKey(page, 'ArrowUp');
@@ -433,29 +450,31 @@ test.describe('Selection after list merge', () => {
 
 test.describe('Tab key in edit mode', () => {
 
-  test('Tab inserts 2 spaces in textarea instead of changing focus', async ({ page }) => {
+  test('Tab inserts spaces in editor instead of changing focus', async ({ page }) => {
     await waitForEditor(page);
 
     // Select first block and enter edit mode
     await pressKey(page, 'ArrowDown');
     await pressKey(page, 'Enter');
+    await waitForEditMode(page);
 
-    const textarea = page.locator('#preview textarea');
-    await expect(textarea).toBeVisible();
-
-    // Clear and type some text
-    await textarea.fill('');
-    await textarea.type('hello');
+    // Select all and delete, then type
+    await page.keyboard.press('Control+a');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.type('hello', { delay: 10 });
 
     // Press Tab
     await page.keyboard.press('Tab');
 
-    // Tab should insert 2 spaces, not move focus
-    const value = await textarea.inputValue();
+    // Tab should insert spaces
+    const value = await getEditorText(page);
     expect(value).toBe('hello    ');
 
-    // Textarea should still be focused
-    const isFocused = await textarea.evaluate(el => document.activeElement === el);
+    // Editor should still be focused
+    const isFocused = await page.evaluate(() => {
+      const cmEl = document.querySelector('#preview .cm-wrapper .cm-editor');
+      return cmEl && cmEl.classList.contains('cm-focused');
+    });
     expect(isFocused).toBe(true);
 
     await page.keyboard.press('Escape');
@@ -464,19 +483,19 @@ test.describe('Tab key in edit mode', () => {
   test('Tab at beginning of line inserts spaces for indentation', async ({ page }) => {
     await waitForEditor(page);
 
-    // Select first block and enter edit mode
     await pressKey(page, 'ArrowDown');
     await pressKey(page, 'Enter');
+    await waitForEditMode(page);
 
-    const textarea = page.locator('#preview textarea');
-    await expect(textarea).toBeVisible();
+    await page.keyboard.press('Control+a');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.type('- item', { delay: 10 });
 
-    await textarea.fill('- item');
     // Move cursor to beginning
     await page.keyboard.press('Home');
     await page.keyboard.press('Tab');
 
-    const value = await textarea.inputValue();
+    const value = await getEditorText(page);
     expect(value).toBe('    - item');
 
     await page.keyboard.press('Escape');
@@ -492,12 +511,10 @@ test.describe('Feature 4: Rubber band selection', () => {
   test('drag across multiple blocks selects them', async ({ page }) => {
     await waitForEditor(page);
 
-    // Get bounding rects of the first few blocks
     const blocks = await getBlocks(page);
     const firstRect = await blocks.nth(0).boundingBox();
     const thirdRect = await blocks.nth(2).boundingBox();
 
-    // Drag from above the first block to below the third block
     const startX = firstRect.x - 10;
     const startY = firstRect.y - 5;
     const endX = thirdRect.x + thirdRect.width + 10;
@@ -508,7 +525,6 @@ test.describe('Feature 4: Rubber band selection', () => {
     await page.mouse.move(endX, endY, { steps: 10 });
     await page.mouse.up();
 
-    // At least the first 3 blocks should be selected
     const selectedCount = await page.locator('#preview .selected').count();
     expect(selectedCount).toBeGreaterThanOrEqual(3);
   });
@@ -526,13 +542,11 @@ test.describe('Feature 4: Rubber band selection', () => {
     await page.mouse.down();
     await page.mouse.move(startX + 200, startY + 200, { steps: 5 });
 
-    // Rubber band should be visible
     const band = page.locator('#rubber-band');
     await expect(band).toBeVisible();
 
     await page.mouse.up();
 
-    // Rubber band should be hidden
     await expect(band).not.toBeVisible();
   });
 
@@ -540,17 +554,738 @@ test.describe('Feature 4: Rubber band selection', () => {
     await waitForEditor(page);
 
     const blocks = await getBlocks(page);
-    const firstRect = await blocks.nth(0).boundingBox();
 
-    // Click on the first block
     await blocks.nth(0).click();
 
-    // First block should be selected
     await expect(blocks.nth(0)).toHaveClass(/selected/);
 
-    // Rubber band should NOT be visible
     const band = page.locator('#rubber-band');
     const bandVisible = await band.isVisible().catch(() => false);
     expect(bandVisible).toBe(false);
   });
 });
+
+// =============================================================
+// Feature 7: Syntax highlighting for code blocks
+// =============================================================
+
+test.describe('Feature 7: Syntax highlighting', () => {
+
+  test('code block with language hint gets hljs classes on initial render', async ({ page }) => {
+    await waitForEditor(page);
+
+    const codeEl = page.locator('#preview pre code');
+    await expect(codeEl).toHaveCount(1);
+
+    await expect(codeEl).toHaveClass(/hljs/);
+
+    const tokenCount = await codeEl.locator('span[class^="hljs-"]').count();
+    expect(tokenCount).toBeGreaterThan(0);
+  });
+
+  test('code block re-highlighted after edit and re-render', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    const count = await blocks.count();
+    let preIndex = -1;
+    for (let i = 0; i < count; i++) {
+      const tag = await blocks.nth(i).evaluate(el => el.tagName);
+      if (tag === 'PRE') {
+        preIndex = i;
+        break;
+      }
+    }
+    expect(preIndex).toBeGreaterThan(-1);
+
+    for (let i = 0; i <= preIndex; i++) {
+      await pressKey(page, 'ArrowDown');
+    }
+
+    // Enter edit mode
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    // Replace with new code
+    await typeInEditor(page, '```python\ndef greet():\n    print("hello")\n```');
+    await page.keyboard.press('Escape');
+
+    // The new code block should have hljs classes
+    const codeEl = page.locator('#preview pre code');
+    await expect(codeEl.first()).toHaveClass(/hljs/);
+    const tokenCount = await codeEl.first().locator('span[class^="hljs-"]').count();
+    expect(tokenCount).toBeGreaterThan(0);
+  });
+
+  test('code block without language hint still gets auto-highlighted', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'b');
+    await waitForEditMode(page);
+    await typeInEditor(page, '```\nconst x = 42;\nconsole.log(x);\n```');
+    await page.keyboard.press('Shift+Enter');
+
+    const codeEls = page.locator('#preview pre code');
+    const lastCode = codeEls.last();
+    await expect(lastCode).toHaveClass(/hljs/);
+  });
+});
+
+// =============================================================
+// Feature 5: Undo / Redo
+// =============================================================
+
+test.describe('Feature 5: Undo / Redo', () => {
+
+  test('undo restores a deleted block', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    const initialCount = await blocks.count();
+
+    await pressKey(page, 'ArrowDown');
+    const firstBlockText = await blocks.first().innerText();
+
+    // Delete with dd
+    await pressKey(page, 'd');
+    await pressKey(page, 'd');
+
+    const afterDeleteCount = await (await getBlocks(page)).count();
+    expect(afterDeleteCount).toBe(initialCount - 1);
+
+    // Undo
+    await page.keyboard.press('Control+z');
+
+    const afterUndoCount = await (await getBlocks(page)).count();
+    expect(afterUndoCount).toBe(initialCount);
+
+    const restoredBlocks = await getBlocks(page);
+    await expect(restoredBlocks.first()).toContainText(firstBlockText);
+  });
+
+  test('undo restores content after edit', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    const originalText = await (await getBlocks(page)).nth(1).innerText();
+
+    // Enter edit mode, change text, render
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+    await typeInEditor(page, 'Completely changed text');
+    await page.keyboard.press('Escape');
+
+    // Verify the edit took effect
+    const selectedBlock = page.locator('#preview .selected');
+    await expect(selectedBlock).toContainText('Completely changed text');
+
+    // Undo the render
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(100);
+
+    // If there's a CM editor now, we need one more undo
+    const hasCM = await page.locator('#preview .cm-wrapper').count();
+    if (hasCM > 0) {
+      await page.keyboard.press('Control+z');
+    }
+
+    // Original text should be back
+    const blocks = await getBlocks(page);
+    await expect(blocks.nth(1)).toContainText(originalText);
+  });
+
+  test('redo reapplies after undo', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'd');
+    await pressKey(page, 'd');
+
+    const blocks = await getBlocks(page);
+    const afterDeleteCount = await blocks.count();
+
+    // Undo
+    await page.keyboard.press('Control+z');
+    const afterUndoCount = await (await getBlocks(page)).count();
+    expect(afterUndoCount).toBe(afterDeleteCount + 1);
+
+    // Redo
+    await page.keyboard.press('Control+Shift+z');
+    const afterRedoCount = await (await getBlocks(page)).count();
+    expect(afterRedoCount).toBe(afterDeleteCount);
+  });
+
+  test('redo stack clears after a new action', async ({ page }) => {
+    await waitForEditor(page);
+
+    const initialCount = await (await getBlocks(page)).count();
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'd');
+    await pressKey(page, 'd');
+
+    // Undo
+    await page.keyboard.press('Control+z');
+    expect(await (await getBlocks(page)).count()).toBe(initialCount);
+
+    // Perform a new action
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'b');
+    await waitForEditMode(page);
+    await typeInEditor(page, 'new block');
+    await page.keyboard.press('Escape');
+
+    // Redo should do nothing
+    const countBeforeRedo = await (await getBlocks(page)).count();
+    await page.keyboard.press('Control+Shift+z');
+    const countAfterRedo = await (await getBlocks(page)).count();
+    expect(countAfterRedo).toBe(countBeforeRedo);
+  });
+
+  test('multiple undos in sequence', async ({ page }) => {
+    await waitForEditor(page);
+
+    const initialCount = await (await getBlocks(page)).count();
+
+    // Select first block
+    await pressKey(page, 'ArrowDown');
+
+    // Insert and render
+    await pressKey(page, 'b');
+    await waitForEditMode(page);
+    await typeInEditor(page, 'Block A');
+    await page.keyboard.press('Escape');
+
+    const afterFirstInsert = await (await getBlocks(page)).count();
+    expect(afterFirstInsert).toBe(initialCount + 1);
+
+    // Insert another and render
+    await pressKey(page, 'b');
+    await waitForEditMode(page);
+    await typeInEditor(page, 'Block B');
+    await page.keyboard.press('Escape');
+
+    const afterSecondInsert = await (await getBlocks(page)).count();
+    expect(afterSecondInsert).toBe(initialCount + 2);
+
+    // Undo four times to get back to initial state
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
+
+    const finalCount = await (await getBlocks(page)).count();
+    expect(finalCount).toBe(initialCount);
+  });
+});
+
+// =============================================================
+// Feature 6: Copy / Paste / Cut blocks (C / V / X)
+// =============================================================
+
+test.describe('Feature 6: Copy / Paste / Cut blocks', () => {
+
+  test('C copies and V pastes a block below selection', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    const blocks = await getBlocks(page);
+    const initialCount = await blocks.count();
+    const firstBlockText = await blocks.first().innerText();
+
+    // Copy
+    await pressKey(page, 'c');
+
+    // Navigate down and paste
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'v');
+
+    const newBlocks = await getBlocks(page);
+    const newCount = await newBlocks.count();
+    expect(newCount).toBe(initialCount + 1);
+
+    const pastedBlock = page.locator('#preview .selected');
+    await expect(pastedBlock).toContainText(firstBlockText);
+  });
+
+  test('multi-block select, C copies all, V pastes all', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+
+    const selectedCount = await page.locator('#preview .selected').count();
+    expect(selectedCount).toBe(2);
+
+    await pressKey(page, 'c');
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'v');
+
+    const blocks = await getBlocks(page);
+    const count = await blocks.count();
+    expect(count).toBeGreaterThanOrEqual(selectedCount + 2);
+  });
+
+  test('X cuts blocks — originals removed, V pastes them back', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    const initialCount = await blocks.count();
+
+    await pressKey(page, 'ArrowDown');
+    const firstBlockText = await blocks.first().innerText();
+
+    // Cut
+    await pressKey(page, 'x');
+
+    const afterCutCount = await (await getBlocks(page)).count();
+    expect(afterCutCount).toBe(initialCount - 1);
+
+    // Paste
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'v');
+
+    const afterPasteCount = await (await getBlocks(page)).count();
+    expect(afterPasteCount).toBe(initialCount);
+
+    const pastedBlock = page.locator('#preview .selected');
+    await expect(pastedBlock).toContainText(firstBlockText);
+  });
+
+  test('V with empty clipboard does nothing', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    const initialCount = await blocks.count();
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'v');
+
+    const afterPasteCount = await (await getBlocks(page)).count();
+    expect(afterPasteCount).toBe(initialCount);
+  });
+
+  test('pasting list block adjacent to list triggers auto-merge', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    const count = await blocks.count();
+    let ulIndex = -1;
+    for (let i = 0; i < count; i++) {
+      const tag = await blocks.nth(i).evaluate(el => el.tagName);
+      if (tag === 'UL') {
+        ulIndex = i;
+        break;
+      }
+    }
+    expect(ulIndex).toBeGreaterThan(-1);
+
+    for (let i = 0; i <= ulIndex; i++) {
+      await pressKey(page, 'ArrowDown');
+    }
+
+    await pressKey(page, 'c');
+    await pressKey(page, 'v');
+
+    const ulCount = await page.locator('#preview > ul').count();
+    expect(ulCount).toBe(1);
+  });
+});
+
+// =============================================================
+// Feature 8: Edit mode height matching
+// =============================================================
+
+test.describe('Feature 8: Edit mode height matching', () => {
+
+  test('editor min-height matches rendered block height', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the first block (h2)
+    await pressKey(page, 'ArrowDown');
+    const blocks = await getBlocks(page);
+    const firstBlock = blocks.first();
+
+    // Capture the rendered block height
+    const renderedHeight = await firstBlock.evaluate(el => el.offsetHeight);
+
+    // Enter edit mode
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    // CM wrapper min-height should match the rendered block height
+    const minHeight = await page.locator('#preview .cm-wrapper').evaluate(el => parseFloat(el.style.minHeight));
+    expect(minHeight).toBe(renderedHeight);
+  });
+
+  test('edit mode does not dramatically change page layout on enter', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    const count = await blocks.count();
+    let pIndex = -1;
+    for (let i = 0; i < count; i++) {
+      const tag = await blocks.nth(i).evaluate(el => el.tagName);
+      if (tag === 'P') {
+        pIndex = i;
+        break;
+      }
+    }
+    expect(pIndex).toBeGreaterThan(-1);
+
+    for (let i = 0; i <= pIndex; i++) {
+      await pressKey(page, 'ArrowDown');
+    }
+
+    const nextIndex = pIndex + 1;
+    let nextBlockTopBefore = null;
+    if (nextIndex < count) {
+      nextBlockTopBefore = await blocks.nth(nextIndex).evaluate(el => el.getBoundingClientRect().top);
+    }
+
+    // Enter edit mode
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    if (nextBlockTopBefore !== null && nextIndex < count) {
+      const cmWrapper = page.locator('#preview .cm-wrapper');
+      const nextSiblingTop = await cmWrapper.evaluate(el => {
+        let next = el.nextElementSibling;
+        return next ? next.getBoundingClientRect().top : null;
+      });
+
+      if (nextSiblingTop !== null) {
+        const shift = Math.abs(nextSiblingTop - nextBlockTopBefore);
+        expect(shift).toBeLessThan(50);
+      }
+    }
+
+    await page.keyboard.press('Escape');
+  });
+});
+
+// =============================================================
+// Feature 9: CodeMirror edit mode
+// =============================================================
+
+test.describe('Feature 9: CodeMirror edit mode', () => {
+
+  test('edit mode creates a CodeMirror editor (.cm-editor present)', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+
+    await waitForEditMode(page);
+    const cmEditor = page.locator('#preview .cm-wrapper .cm-editor');
+    await expect(cmEditor).toBeVisible();
+  });
+
+  test('Shift+Enter exits edit mode and renders correctly', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    await typeInEditor(page, 'Hello **world**');
+    await page.keyboard.press('Shift+Enter');
+
+    await expect(page.locator('#preview .cm-wrapper')).toHaveCount(0);
+
+    const selected = page.locator('#preview .selected');
+    await expect(selected).toContainText('Hello world');
+    const strongCount = await selected.locator('strong').count();
+    expect(strongCount).toBe(1);
+  });
+
+  test('Escape exits edit mode and renders correctly', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    await page.keyboard.press('Escape');
+
+    await expect(page.locator('#preview .cm-wrapper')).toHaveCount(0);
+
+    const selected = page.locator('#preview .selected');
+    await expect(selected).toHaveCount(1);
+  });
+
+  test('CodeMirror adds markdown syntax highlighting tokens', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the heading block (first block is h2 "Welcome to the Markdown Editor")
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    const cmEditor = page.locator('#preview .cm-wrapper .cm-editor');
+    await expect(cmEditor).toBeVisible();
+
+    // Check that CodeMirror's content area has styled spans (syntax tokens)
+    const tokenInfo = await page.evaluate(() => {
+      const cm = document.querySelector('.cm-content');
+      if (!cm) return { hasTokens: false };
+      const spans = cm.querySelectorAll('span');
+      return {
+        hasTokens: spans.length > 0,
+        // Check that at least one span has inline styles from HighlightStyle
+        hasStyledSpans: Array.from(spans).some(s => s.style.length > 0 || s.className),
+      };
+    });
+    expect(tokenInfo.hasTokens).toBe(true);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('line decorations: heading lines get cm-md-h1/h2/h3 classes', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the h2 heading (first block)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    // The h2 content "## Welcome to the Markdown Editor" should have cm-md-h2 line decoration
+    const hasH2Class = await page.evaluate(() => {
+      const lines = document.querySelectorAll('.cm-line');
+      return Array.from(lines).some(line => line.classList.contains('cm-md-h2'));
+    });
+    expect(hasH2Class).toBe(true);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('line decorations: list item lines get cm-md-list-item class', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Navigate to the list block (block index 3: the UL with features)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    const hasListItemClass = await page.evaluate(() => {
+      const lines = document.querySelectorAll('.cm-line');
+      return Array.from(lines).some(line => line.classList.contains('cm-md-list-item'));
+    });
+    expect(hasListItemClass).toBe(true);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('line decorations: code block lines get cm-md-code-fence and cm-md-code-line classes', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Navigate to the code block (block index 5: the pre/code block)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    const codeClasses = await page.evaluate(() => {
+      const lines = document.querySelectorAll('.cm-line');
+      const hasFence = Array.from(lines).some(line => line.classList.contains('cm-md-code-fence'));
+      const hasCodeLine = Array.from(lines).some(line => line.classList.contains('cm-md-code-line'));
+      return { hasFence, hasCodeLine };
+    });
+    expect(codeClasses.hasFence).toBe(true);
+    expect(codeClasses.hasCodeLine).toBe(true);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('line decorations: blockquote lines get cm-md-blockquote class', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Navigate to the blockquote (block index 6: last block)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    const hasBlockquoteClass = await page.evaluate(() => {
+      const lines = document.querySelectorAll('.cm-line');
+      return Array.from(lines).some(line => line.classList.contains('cm-md-blockquote'));
+    });
+    expect(hasBlockquoteClass).toBe(true);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('CM wrapper min-height matches rendered block height', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the heading block
+    await pressKey(page, 'ArrowDown');
+
+    // Capture rendered height before entering edit mode
+    const renderedHeight = await page.evaluate(() => {
+      const selected = document.querySelector('.selected');
+      return selected ? selected.offsetHeight : 0;
+    });
+    expect(renderedHeight).toBeGreaterThan(0);
+
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    // Check CM wrapper has min-height matching rendered height
+    const wrapperMinHeight = await page.evaluate(() => {
+      const wrapper = document.querySelector('.cm-wrapper');
+      return wrapper ? parseInt(wrapper.style.minHeight) : 0;
+    });
+    expect(wrapperMinHeight).toBeGreaterThanOrEqual(renderedHeight - 5);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('editor shrinks when content is deleted (min-height clears on edit)', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the list block (index 3)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    // Get initial wrapper height, then add content to make it taller
+    const initialHeight = await page.evaluate(() => {
+      const w = document.querySelector('.cm-wrapper');
+      return w.offsetHeight;
+    });
+
+    await page.evaluate(() => {
+      const w = document.querySelector('.cm-wrapper');
+      const view = w._cmView;
+      const doc = view.state.doc.toString();
+      view.dispatch({ changes: { from: doc.length, insert: '\n- Extra 1\n- Extra 2\n- Extra 3\n- Extra 4\n- Extra 5' }});
+    });
+
+    const expandedHeight = await page.evaluate(() => {
+      const w = document.querySelector('.cm-wrapper');
+      return w.offsetHeight;
+    });
+    expect(expandedHeight).toBeGreaterThan(initialHeight);
+
+    // Now delete extra items — keep only first line
+    await page.evaluate(() => {
+      const w = document.querySelector('.cm-wrapper');
+      const view = w._cmView;
+      const firstLine = view.state.doc.line(1).text;
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: firstLine }});
+    });
+
+    // Verify min-height was cleared and editor shrank
+    const afterDeleteHeight = await page.evaluate(() => {
+      const w = document.querySelector('.cm-wrapper');
+      return { height: w.offsetHeight, minHeight: w.style.minHeight };
+    });
+    expect(afterDeleteHeight.minHeight).toBe('');
+    expect(afterDeleteHeight.height).toBeLessThan(expandedHeight);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('full round-trip: enter edit mode, modify text, exit, verify rendered output', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    await typeInEditor(page, 'A completely **new** paragraph with `code`.');
+
+    await page.keyboard.press('Escape');
+
+    const selected = page.locator('#preview .selected');
+    await expect(selected).toContainText('new');
+    await expect(selected).toContainText('code');
+
+    const strongCount = await selected.locator('strong').count();
+    expect(strongCount).toBe(1);
+    const codeCount = await selected.locator('code').count();
+    expect(codeCount).toBe(1);
+  });
+
+  test('undo/redo integration still works', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    const initialCount = await blocks.count();
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'd');
+    await pressKey(page, 'd');
+
+    expect(await (await getBlocks(page)).count()).toBe(initialCount - 1);
+
+    await page.keyboard.press('Control+z');
+    expect(await (await getBlocks(page)).count()).toBe(initialCount);
+  });
+
+  test('focus management: CodeMirror editor receives focus on enter', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    const isFocused = await page.evaluate(() => {
+      const cmEl = document.querySelector('#preview .cm-wrapper .cm-editor');
+      return cmEl && cmEl.classList.contains('cm-focused');
+    });
+    expect(isFocused).toBe(true);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('insert before (a key) creates CodeMirror editor', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'a');
+    await waitForEditMode(page);
+
+    const cmEditor = page.locator('#preview .cm-wrapper .cm-editor');
+    await expect(cmEditor).toBeVisible();
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('insert after (b key) creates CodeMirror editor', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'b');
+    await waitForEditMode(page);
+
+    const cmEditor = page.locator('#preview .cm-wrapper .cm-editor');
+    await expect(cmEditor).toBeVisible();
+
+    await page.keyboard.press('Escape');
+  });
+});
+
