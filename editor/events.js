@@ -453,7 +453,6 @@ function createEditElement(markdown, totalHeight, firstTag, parent, insertBefore
         if (totalHeight > 0) {
             wrapper.style.minHeight = totalHeight + 'px';
         }
-
         if (insertBefore) {
             parent.insertBefore(wrapper, insertBefore);
         } else {

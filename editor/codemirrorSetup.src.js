@@ -171,6 +171,13 @@ function createMarkdownEditor(container, initialContent, onExit) {
     },
   ]);
 
+  // Clear container min-height on first edit so the editor shrinks to fit content
+  const autoShrink = EditorView.updateListener.of(update => {
+    if (update.docChanged && container.style.minHeight) {
+      container.style.minHeight = '';
+    }
+  });
+
   const state = EditorState.create({
     doc: initialContent,
     extensions: [
@@ -182,6 +189,7 @@ function createMarkdownEditor(container, initialContent, onExit) {
       editorTheme,
       markdownLineDecorationsPlugin(),
       EditorView.lineWrapping,
+      autoShrink,
     ],
   });
 

@@ -1019,9 +1019,10 @@ test.describe('Feature 9: CodeMirror edit mode', () => {
     await expect(selected).toHaveCount(1);
   });
 
-  test('CodeMirror adds markdown syntax classes', async ({ page }) => {
+  test('CodeMirror adds markdown syntax highlighting tokens', async ({ page }) => {
     await waitForEditor(page);
 
+    // Select the heading block (first block is h2 "Welcome to the Markdown Editor")
     await pressKey(page, 'ArrowDown');
     await pressKey(page, 'Enter');
     await waitForEditMode(page);
@@ -1029,13 +1030,179 @@ test.describe('Feature 9: CodeMirror edit mode', () => {
     const cmEditor = page.locator('#preview .cm-wrapper .cm-editor');
     await expect(cmEditor).toBeVisible();
 
-    // Check that CodeMirror's content area has some syntax tokens (spans)
-    const hasTokens = await page.evaluate(() => {
+    // Check that CodeMirror's content area has styled spans (syntax tokens)
+    const tokenInfo = await page.evaluate(() => {
       const cm = document.querySelector('.cm-content');
-      if (!cm) return false;
-      return cm.querySelectorAll('span').length > 0;
+      if (!cm) return { hasTokens: false };
+      const spans = cm.querySelectorAll('span');
+      return {
+        hasTokens: spans.length > 0,
+        // Check that at least one span has inline styles from HighlightStyle
+        hasStyledSpans: Array.from(spans).some(s => s.style.length > 0 || s.className),
+      };
     });
-    expect(hasTokens).toBe(true);
+    expect(tokenInfo.hasTokens).toBe(true);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('line decorations: heading lines get cm-md-h1/h2/h3 classes', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the h2 heading (first block)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    // The h2 content "## Welcome to the Markdown Editor" should have cm-md-h2 line decoration
+    const hasH2Class = await page.evaluate(() => {
+      const lines = document.querySelectorAll('.cm-line');
+      return Array.from(lines).some(line => line.classList.contains('cm-md-h2'));
+    });
+    expect(hasH2Class).toBe(true);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('line decorations: list item lines get cm-md-list-item class', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Navigate to the list block (block index 3: the UL with features)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    const hasListItemClass = await page.evaluate(() => {
+      const lines = document.querySelectorAll('.cm-line');
+      return Array.from(lines).some(line => line.classList.contains('cm-md-list-item'));
+    });
+    expect(hasListItemClass).toBe(true);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('line decorations: code block lines get cm-md-code-fence and cm-md-code-line classes', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Navigate to the code block (block index 5: the pre/code block)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    const codeClasses = await page.evaluate(() => {
+      const lines = document.querySelectorAll('.cm-line');
+      const hasFence = Array.from(lines).some(line => line.classList.contains('cm-md-code-fence'));
+      const hasCodeLine = Array.from(lines).some(line => line.classList.contains('cm-md-code-line'));
+      return { hasFence, hasCodeLine };
+    });
+    expect(codeClasses.hasFence).toBe(true);
+    expect(codeClasses.hasCodeLine).toBe(true);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('line decorations: blockquote lines get cm-md-blockquote class', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Navigate to the blockquote (block index 6: last block)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    const hasBlockquoteClass = await page.evaluate(() => {
+      const lines = document.querySelectorAll('.cm-line');
+      return Array.from(lines).some(line => line.classList.contains('cm-md-blockquote'));
+    });
+    expect(hasBlockquoteClass).toBe(true);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('CM wrapper min-height matches rendered block height', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the heading block
+    await pressKey(page, 'ArrowDown');
+
+    // Capture rendered height before entering edit mode
+    const renderedHeight = await page.evaluate(() => {
+      const selected = document.querySelector('.selected');
+      return selected ? selected.offsetHeight : 0;
+    });
+    expect(renderedHeight).toBeGreaterThan(0);
+
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    // Check CM wrapper has min-height matching rendered height
+    const wrapperMinHeight = await page.evaluate(() => {
+      const wrapper = document.querySelector('.cm-wrapper');
+      return wrapper ? parseInt(wrapper.style.minHeight) : 0;
+    });
+    expect(wrapperMinHeight).toBeGreaterThanOrEqual(renderedHeight - 5);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('editor shrinks when content is deleted (min-height clears on edit)', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the list block (index 3)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    // Get initial wrapper height, then add content to make it taller
+    const initialHeight = await page.evaluate(() => {
+      const w = document.querySelector('.cm-wrapper');
+      return w.offsetHeight;
+    });
+
+    await page.evaluate(() => {
+      const w = document.querySelector('.cm-wrapper');
+      const view = w._cmView;
+      const doc = view.state.doc.toString();
+      view.dispatch({ changes: { from: doc.length, insert: '\n- Extra 1\n- Extra 2\n- Extra 3\n- Extra 4\n- Extra 5' }});
+    });
+
+    const expandedHeight = await page.evaluate(() => {
+      const w = document.querySelector('.cm-wrapper');
+      return w.offsetHeight;
+    });
+    expect(expandedHeight).toBeGreaterThan(initialHeight);
+
+    // Now delete extra items — keep only first line
+    await page.evaluate(() => {
+      const w = document.querySelector('.cm-wrapper');
+      const view = w._cmView;
+      const firstLine = view.state.doc.line(1).text;
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: firstLine }});
+    });
+
+    // Verify min-height was cleared and editor shrank
+    const afterDeleteHeight = await page.evaluate(() => {
+      const w = document.querySelector('.cm-wrapper');
+      return { height: w.offsetHeight, minHeight: w.style.minHeight };
+    });
+    expect(afterDeleteHeight.minHeight).toBe('');
+    expect(afterDeleteHeight.height).toBeLessThan(expandedHeight);
 
     await page.keyboard.press('Escape');
   });
@@ -1121,3 +1288,4 @@ test.describe('Feature 9: CodeMirror edit mode', () => {
     await page.keyboard.press('Escape');
   });
 });
+

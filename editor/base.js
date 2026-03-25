@@ -47,6 +47,9 @@ turndownService.addRule('fencedCodeBlock', {
 turndownService.options.codeBlockStyle = 'fenced';
 // Use dashes for bullet lists (classic markdown style)
 turndownService.options.bulletListMarker = '-';
+// Use ATX-style headings (## heading) instead of setext (underline) —
+// required for CodeMirror line decorations to detect heading lines
+turndownService.options.headingStyle = 'atx';
 
 document.addEventListener('DOMContentLoaded', function() {
     const preview = document.getElementById('preview');
