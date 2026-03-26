@@ -1166,3 +1166,88 @@ test.describe('Feature 9: CodeMirror edit mode', () => {
   });
 });
 
+// =============================================================
+// Minor UI fixes: delete selection and Escape deselect
+// =============================================================
+
+test.describe('Minor UI fixes', () => {
+
+  test('deleting a block selects the block above it', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    const initialCount = await blocks.count();
+
+    // Navigate to the third block (index 2)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
+
+    const aboveBlockText = await blocks.nth(1).innerText();
+
+    // Delete with dd
+    await pressKey(page, 'd');
+    await pressKey(page, 'd');
+
+    const afterBlocks = await getBlocks(page);
+    expect(await afterBlocks.count()).toBe(initialCount - 1);
+
+    // The block above (previously index 1) should now be selected
+    const selected = page.locator('#preview .selected');
+    await expect(selected).toHaveCount(1);
+    await expect(selected).toContainText(aboveBlockText);
+  });
+
+  test('deleting the first block selects the new first block', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    const secondBlockText = await blocks.nth(1).innerText();
+
+    // Navigate to the first block
+    await pressKey(page, 'ArrowDown');
+
+    // Delete with dd
+    await pressKey(page, 'd');
+    await pressKey(page, 'd');
+
+    // The new first block (previously second) should be selected
+    const selected = page.locator('#preview .selected');
+    await expect(selected).toHaveCount(1);
+    await expect(selected).toContainText(secondBlockText);
+  });
+
+  test('Escape on a selected block deselects it', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select a block
+    await pressKey(page, 'ArrowDown');
+    const selected = page.locator('#preview .selected');
+    await expect(selected).toHaveCount(1);
+
+    // Press Escape
+    await pressKey(page, 'Escape');
+
+    // No blocks should be selected
+    await expect(selected).toHaveCount(0);
+  });
+
+  test('Escape on multi-selected blocks deselects all', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select multiple blocks
+    await pressKey(page, 'ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+
+    const selected = page.locator('#preview .selected');
+    expect(await selected.count()).toBeGreaterThanOrEqual(2);
+
+    // Press Escape
+    await pressKey(page, 'Escape');
+
+    // No blocks should be selected
+    await expect(selected).toHaveCount(0);
+  });
+});
+

@@ -159,6 +159,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Double D pressed: delete triggered!');
                 pushUndo();
                 const selectedElements = document.querySelectorAll('.selected');
+                // Find the index of the first selected element before removing
+                const firstSelectedIdx = currentSelectedIndex;
                 selectedElements.forEach(el => {
                     // Destroy CM editors before removing
                     if (el._cmView && window.CM) {
@@ -166,6 +168,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     el.remove();
                 });
+                setupSelectionHandlers();
+                // Select the cell above (or the first cell if deleted from the top)
+                if (selectableElements.length > 0) {
+                    const newIndex = Math.min(Math.max(0, firstSelectedIdx - 1), selectableElements.length - 1);
+                    deselectAll();
+                    selectableElements[newIndex].classList.add('selected');
+                    currentSelectedIndex = newIndex;
+                    selectableElements[newIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    currentSelectedIndex = -1;
+                }
                 lastKey = null;  // reset
             } else {
                 lastKey = 'd';
@@ -244,6 +257,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         else if (e.key === 'x') {
             cutBlocks();
+        }
+        else if (e.key === 'Escape') {
+            deselectAll();
+            currentSelectedIndex = -1;
         }
     });
 
