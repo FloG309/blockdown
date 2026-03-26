@@ -1112,7 +1112,9 @@ test.describe('Feature 9: CodeMirror edit mode', () => {
   test('line decorations: blockquote lines get cm-md-blockquote class', async ({ page }) => {
     await waitForEditor(page);
 
-    // Navigate to the blockquote (block index 6: last block)
+    // Navigate to the blockquote (block index 8: last block, after mermaid blocks)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'ArrowDown');
     await pressKey(page, 'ArrowDown');
     await pressKey(page, 'ArrowDown');
     await pressKey(page, 'ArrowDown');
