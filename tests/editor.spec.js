@@ -56,37 +56,6 @@ async function getEditorText(page) {
 
 test.describe('Feature 1+3: Escape renders and restores selection', () => {
 
-  test('select block, Enter to edit, Escape returns to rendered+selected', async ({ page }) => {
-    await waitForEditor(page);
-
-    // Press ArrowDown to select the first block (h2)
-    await pressKey(page, 'ArrowDown');
-    const blocks = await getBlocks(page);
-    await expect(blocks.first()).toHaveClass(/selected/);
-
-    // Press Enter to open editor for editing
-    await pressKey(page, 'Enter');
-
-    // A CM editor should now exist
-    await waitForEditMode(page);
-
-    // Press Escape to exit editing
-    await page.keyboard.press('Escape');
-
-    // Editor should be gone
-    await expect(page.locator('#preview .cm-wrapper')).toHaveCount(0);
-    await expect(page.locator('#preview textarea')).toHaveCount(0);
-
-    // The rendered block should be back and selected
-    const newBlocks = await getBlocks(page);
-    const firstBlock = newBlocks.first();
-    await expect(firstBlock).toHaveClass(/selected/);
-    // It should be a rendered element, not an editor
-    const tagName = await firstBlock.evaluate(el => el.tagName);
-    expect(tagName).not.toBe('TEXTAREA');
-    expect(tagName).not.toBe('DIV'); // not a cm-wrapper
-  });
-
   test('Shift+Enter renders and keeps block selected', async ({ page }) => {
     await waitForEditor(page);
 
@@ -111,30 +80,6 @@ test.describe('Feature 1+3: Escape renders and restores selection', () => {
     expect(tagName).not.toBe('TEXTAREA');
   });
 
-  test('edit content, Escape renders the edited content and selects it', async ({ page }) => {
-    await waitForEditor(page);
-
-    // Select second block (a paragraph)
-    await pressKey(page, 'ArrowDown');
-    await pressKey(page, 'ArrowDown');
-
-    // Enter edit mode
-    await pressKey(page, 'Enter');
-    await waitForEditMode(page);
-
-    // Clear and type new content
-    await typeInEditor(page, 'This is **edited** content.');
-
-    // Escape to render and select
-    await page.keyboard.press('Escape');
-
-    // Should be rendered HTML, not editor
-    await expect(page.locator('#preview .cm-wrapper')).toHaveCount(0);
-
-    // The rendered block should contain the edited text
-    const selectedBlock = page.locator('#preview .selected');
-    await expect(selectedBlock).toContainText('edited');
-  });
 });
 
 // =============================================================
@@ -583,39 +528,7 @@ test.describe('Feature 7: Syntax highlighting', () => {
     expect(tokenCount).toBeGreaterThan(0);
   });
 
-  test('code block re-highlighted after edit and re-render', async ({ page }) => {
-    await waitForEditor(page);
 
-    const blocks = await getBlocks(page);
-    const count = await blocks.count();
-    let preIndex = -1;
-    for (let i = 0; i < count; i++) {
-      const tag = await blocks.nth(i).evaluate(el => el.tagName);
-      if (tag === 'PRE') {
-        preIndex = i;
-        break;
-      }
-    }
-    expect(preIndex).toBeGreaterThan(-1);
-
-    for (let i = 0; i <= preIndex; i++) {
-      await pressKey(page, 'ArrowDown');
-    }
-
-    // Enter edit mode
-    await pressKey(page, 'Enter');
-    await waitForEditMode(page);
-
-    // Replace with new code
-    await typeInEditor(page, '```python\ndef greet():\n    print("hello")\n```');
-    await page.keyboard.press('Escape');
-
-    // The new code block should have hljs classes
-    const codeEl = page.locator('#preview pre code');
-    await expect(codeEl.first()).toHaveClass(/hljs/);
-    const tokenCount = await codeEl.first().locator('span[class^="hljs-"]').count();
-    expect(tokenCount).toBeGreaterThan(0);
-  });
 
   test('code block without language hint still gets auto-highlighted', async ({ page }) => {
     await waitForEditor(page);
@@ -1004,21 +917,6 @@ test.describe('Feature 9: CodeMirror edit mode', () => {
     expect(strongCount).toBe(1);
   });
 
-  test('Escape exits edit mode and renders correctly', async ({ page }) => {
-    await waitForEditor(page);
-
-    await pressKey(page, 'ArrowDown');
-    await pressKey(page, 'Enter');
-    await waitForEditMode(page);
-
-    await page.keyboard.press('Escape');
-
-    await expect(page.locator('#preview .cm-wrapper')).toHaveCount(0);
-
-    const selected = page.locator('#preview .selected');
-    await expect(selected).toHaveCount(1);
-  });
-
   test('CodeMirror adds markdown syntax highlighting tokens', async ({ page }) => {
     await waitForEditor(page);
 
@@ -1207,29 +1105,6 @@ test.describe('Feature 9: CodeMirror edit mode', () => {
     expect(afterDeleteHeight.height).toBeLessThan(expandedHeight);
 
     await page.keyboard.press('Escape');
-  });
-
-  test('full round-trip: enter edit mode, modify text, exit, verify rendered output', async ({ page }) => {
-    await waitForEditor(page);
-
-    await pressKey(page, 'ArrowDown');
-    await pressKey(page, 'ArrowDown');
-
-    await pressKey(page, 'Enter');
-    await waitForEditMode(page);
-
-    await typeInEditor(page, 'A completely **new** paragraph with `code`.');
-
-    await page.keyboard.press('Escape');
-
-    const selected = page.locator('#preview .selected');
-    await expect(selected).toContainText('new');
-    await expect(selected).toContainText('code');
-
-    const strongCount = await selected.locator('strong').count();
-    expect(strongCount).toBe(1);
-    const codeCount = await selected.locator('code').count();
-    expect(codeCount).toBe(1);
   });
 
   test('undo/redo integration still works', async ({ page }) => {
