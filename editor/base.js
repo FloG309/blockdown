@@ -57,6 +57,9 @@ turndownService.addRule('fencedCodeBlock', {
 turndownService.options.codeBlockStyle = 'fenced';
 // Use dashes for bullet lists (classic markdown style)
 turndownService.options.bulletListMarker = '-';
+// Use ATX-style headings (## heading) instead of setext (underline) —
+// required for CodeMirror line decorations to detect heading lines
+turndownService.options.headingStyle = 'atx';
 
 // Turndown rule: convert mermaid containers back to fenced mermaid code blocks
 turndownService.addRule('mermaidContainer', {
@@ -80,6 +83,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const html = marked.parse(markdownText);
         preview.innerHTML = html;
 
+        // Apply syntax highlighting to code blocks
+        highlightCodeBlocks(preview);
+
         // Replace mermaid code blocks with rendered SVG diagrams
         await processMermaidBlocks(preview);
 
@@ -94,10 +100,56 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('keydown', function(e) {
         const now = Date.now();
         const isTextarea = e.target.tagName === 'TEXTAREA';
+        // Detect if focus is inside a CodeMirror editor (contenteditable div inside .cm-editor)
+        const isCMEditor = e.target.closest && e.target.closest('.cm-editor');
         const isInput = e.target.tagName === 'INPUT' || e.target.isContentEditable;
+        const isEditing = isTextarea || isCMEditor || isInput;
 
-        // Handle keys for form inputs form inputs
-        if (isTextarea || isInput) return;
+        // Handle undo/redo (works everywhere, including edit mode)
+        // But inside CM editor, let CM handle its own undo unless it's block-level
+        if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+            if (!isCMEditor) {
+                e.preventDefault();
+                undo();
+                return;
+            }
+            // Let CM handle its own undo
+            return;
+        }
+        if (e.ctrlKey && (e.key === 'y' || (e.key === 'z' && e.shiftKey)) || (e.ctrlKey && e.shiftKey && e.key === 'Z')) {
+            if (!isCMEditor) {
+                e.preventDefault();
+                redo();
+                return;
+            }
+            // Let CM handle its own redo
+            return;
+        }
+
+        // Ctrl+Enter: render all blurred editors in the selection
+        if (e.ctrlKey && e.key === 'Enter') {
+            const selected = Array.from(document.querySelectorAll('.selected'));
+            const editors = selected.filter(el =>
+                el.tagName === 'TEXTAREA' ||
+                (el.classList && el.classList.contains('cm-wrapper'))
+            );
+            if (editors.length > 0) {
+                e.preventDefault();
+                pushUndo();
+                for (let i = editors.length - 1; i >= 0; i--) {
+                    const el = editors[i];
+                    if (el.classList.contains('cm-wrapper') && el._cmView) {
+                        el.setAttribute('data-markdown-text', el._cmView.state.doc.toString());
+                    }
+                    renderMarkdownPartial(el);
+                }
+                setupSelectionHandlers();
+                return;
+            }
+        }
+
+        // Handle keys for form inputs / edit mode
+        if (isEditing) return;
 
         // Handle delete option
 
@@ -105,8 +157,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (lastKey === 'd' && (now - lastKeyTime) < 1000) {  // 400ms threshold
                 // Double 'd' detected — perform delete
                 console.log('Double D pressed: delete triggered!');
+                pushUndo();
                 const selectedElements = document.querySelectorAll('.selected');
-                selectedElements.forEach(el => el.remove());
+                selectedElements.forEach(el => {
+                    // Destroy CM editors before removing
+                    if (el._cmView && window.CM) {
+                        window.CM.destroyEditor(el._cmView);
+                    }
+                    el.remove();
+                });
                 lastKey = null;  // reset
             } else {
                 lastKey = 'd';
@@ -117,12 +176,24 @@ document.addEventListener('DOMContentLoaded', function() {
             lastKey = null;
         }
 
-        //handle special case where textarea is selected, but not focused (== no active cursor)
+        // Handle special case where textarea/CM wrapper is selected but not focused
         const selectedElement = selectableElements[currentSelectedIndex]
         if (selectedElement && selectedElement.tagName === 'TEXTAREA') {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.ctrlKey) {
                 e.preventDefault();
                 selectedElement.focus();
+                selectedElement.classList.remove('selected');
+                return;
+            }
+        }
+        // Handle special case where CM wrapper is selected but not focused
+        if (selectedElement && selectedElement.classList && selectedElement.classList.contains('cm-wrapper')) {
+            if (e.key === 'Enter' && !e.ctrlKey) {
+                e.preventDefault();
+                // Focus the CM editor inside
+                if (selectedElement._cmView) {
+                    selectedElement._cmView.focus();
+                }
                 selectedElement.classList.remove('selected');
                 return;
             }
@@ -142,6 +213,20 @@ document.addEventListener('DOMContentLoaded', function() {
         else if (e.key === 'ArrowDown') {
             handleArrowDown(e)
         }
+        else if (e.key === 'ArrowRight') {
+            // Re-enter a blurred editor with Right arrow
+            if (selectedElement && selectedElement.classList && selectedElement.classList.contains('cm-wrapper')) {
+                e.preventDefault();
+                if (selectedElement._cmView) {
+                    selectedElement._cmView.focus();
+                }
+                selectedElement.classList.remove('selected');
+            } else if (selectedElement && selectedElement.tagName === 'TEXTAREA') {
+                e.preventDefault();
+                selectedElement.focus();
+                selectedElement.classList.remove('selected');
+            }
+        }
         else if (e.key === 'Enter') {
             handleEnter(e)
         }
@@ -151,6 +236,35 @@ document.addEventListener('DOMContentLoaded', function() {
         else if (e.key === 'b') {
             insertTextArea(e, insertBefore = false)
         }
+        else if (e.key === 'c') {
+            copyBlocks();
+        }
+        else if (e.key === 'v') {
+            pasteBlocks();
+        }
+        else if (e.key === 'x') {
+            cutBlocks();
+        }
+    });
+
+    // Handle stepping out of CM editor with arrow keys
+    window.addEventListener('cm-step-out', (e) => {
+        const { direction, wrapper } = e.detail;
+        setupSelectionHandlers();
+        const wrapperIndex = selectableElements.indexOf(wrapper);
+        if (wrapperIndex === -1) return;
+
+        let targetIndex;
+        if (direction === 'up') {
+            targetIndex = Math.max(0, wrapperIndex - 1);
+        } else {
+            targetIndex = Math.min(selectableElements.length - 1, wrapperIndex + 1);
+        }
+
+        deselectAll();
+        selectableElements[targetIndex].classList.add('selected');
+        currentSelectedIndex = targetIndex;
+        selectableElements[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 
     // Initial render
