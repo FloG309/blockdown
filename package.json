@@ -1,0 +1,24 @@
+{
+  "name": "blockdown-minor-ui-fixes",
+  "version": "1.0.0",
+  "description": "An in-place markdown renderer (inspired by the Jupyter UI), which allows to edit rendered markdown by inserting localized editing-blocks",
+  "main": "playwright.config.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.40.0",
+    "@lezer/highlight": "^1.2.3"
+  }
+}

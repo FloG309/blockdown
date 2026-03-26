@@ -15062,6 +15062,8 @@
     return { start: firstToken, matched: false };
   }
   function matchPlainBrackets(state, pos, dir, tree, tokenType, maxScanDistance, brackets) {
+    if (dir < 0 ? !pos : pos == state.doc.length)
+      return null;
     let startCh = dir < 0 ? state.sliceDoc(pos - 1, pos) : state.sliceDoc(pos, pos + 1);
     let bracket2 = brackets.indexOf(startCh);
     if (bracket2 < 0 || bracket2 % 2 == 0 != dir > 0)
@@ -24702,10 +24704,47 @@
             }
           },
           {
-            key: "Escape",
+            key: "Ctrl-Enter",
             run: (view2) => {
               onExit(view2.state.doc.toString());
               return true;
+            }
+          },
+          {
+            key: "Escape",
+            run: (view2) => {
+              view2.contentDOM.blur();
+              const wrapper = view2.dom.parentElement;
+              if (wrapper) wrapper.classList.add("selected");
+              return true;
+            }
+          },
+          {
+            key: "ArrowUp",
+            run: (view2) => {
+              const cursor = view2.state.selection.main.head;
+              const line = view2.state.doc.lineAt(cursor);
+              if (line.number === 1) {
+                view2.contentDOM.blur();
+                const wrapper = view2.dom.parentElement;
+                window.dispatchEvent(new CustomEvent("cm-step-out", { detail: { direction: "up", wrapper } }));
+                return true;
+              }
+              return false;
+            }
+          },
+          {
+            key: "ArrowDown",
+            run: (view2) => {
+              const cursor = view2.state.selection.main.head;
+              const line = view2.state.doc.lineAt(cursor);
+              if (line.number === view2.state.doc.lines) {
+                view2.contentDOM.blur();
+                const wrapper = view2.dom.parentElement;
+                window.dispatchEvent(new CustomEvent("cm-step-out", { detail: { direction: "down", wrapper } }));
+                return true;
+              }
+              return false;
             }
           },
           {

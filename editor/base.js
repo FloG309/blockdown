@@ -99,6 +99,28 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // Ctrl+Enter: render all blurred editors in the selection
+        if (e.ctrlKey && e.key === 'Enter') {
+            const selected = Array.from(document.querySelectorAll('.selected'));
+            const editors = selected.filter(el =>
+                el.tagName === 'TEXTAREA' ||
+                (el.classList && el.classList.contains('cm-wrapper'))
+            );
+            if (editors.length > 0) {
+                e.preventDefault();
+                pushUndo();
+                for (let i = editors.length - 1; i >= 0; i--) {
+                    const el = editors[i];
+                    if (el.classList.contains('cm-wrapper') && el._cmView) {
+                        el.setAttribute('data-markdown-text', el._cmView.state.doc.toString());
+                    }
+                    renderMarkdownPartial(el);
+                }
+                setupSelectionHandlers();
+                return;
+            }
+        }
+
         // Handle keys for form inputs / edit mode
         if (isEditing) return;
 
@@ -130,7 +152,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Handle special case where textarea/CM wrapper is selected but not focused
         const selectedElement = selectableElements[currentSelectedIndex]
         if (selectedElement && selectedElement.tagName === 'TEXTAREA') {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.ctrlKey) {
                 e.preventDefault();
                 selectedElement.focus();
                 selectedElement.classList.remove('selected');
@@ -139,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         // Handle special case where CM wrapper is selected but not focused
         if (selectedElement && selectedElement.classList && selectedElement.classList.contains('cm-wrapper')) {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.ctrlKey) {
                 e.preventDefault();
                 // Focus the CM editor inside
                 if (selectedElement._cmView) {
@@ -164,6 +186,20 @@ document.addEventListener('DOMContentLoaded', function() {
         else if (e.key === 'ArrowDown') {
             handleArrowDown(e)
         }
+        else if (e.key === 'ArrowRight') {
+            // Re-enter a blurred editor with Right arrow
+            if (selectedElement && selectedElement.classList && selectedElement.classList.contains('cm-wrapper')) {
+                e.preventDefault();
+                if (selectedElement._cmView) {
+                    selectedElement._cmView.focus();
+                }
+                selectedElement.classList.remove('selected');
+            } else if (selectedElement && selectedElement.tagName === 'TEXTAREA') {
+                e.preventDefault();
+                selectedElement.focus();
+                selectedElement.classList.remove('selected');
+            }
+        }
         else if (e.key === 'Enter') {
             handleEnter(e)
         }
@@ -182,6 +218,26 @@ document.addEventListener('DOMContentLoaded', function() {
         else if (e.key === 'x') {
             cutBlocks();
         }
+    });
+
+    // Handle stepping out of CM editor with arrow keys
+    window.addEventListener('cm-step-out', (e) => {
+        const { direction, wrapper } = e.detail;
+        setupSelectionHandlers();
+        const wrapperIndex = selectableElements.indexOf(wrapper);
+        if (wrapperIndex === -1) return;
+
+        let targetIndex;
+        if (direction === 'up') {
+            targetIndex = Math.max(0, wrapperIndex - 1);
+        } else {
+            targetIndex = Math.min(selectableElements.length - 1, wrapperIndex + 1);
+        }
+
+        deselectAll();
+        selectableElements[targetIndex].classList.add('selected');
+        currentSelectedIndex = targetIndex;
+        selectableElements[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 
     // Initial render

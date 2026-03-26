@@ -156,10 +156,47 @@ function createMarkdownEditor(container, initialContent, onExit) {
       },
     },
     {
-      key: 'Escape',
+      key: 'Ctrl-Enter',
       run: (view) => {
         onExit(view.state.doc.toString());
         return true;
+      },
+    },
+    {
+      key: 'Escape',
+      run: (view) => {
+        view.contentDOM.blur();
+        const wrapper = view.dom.parentElement;
+        if (wrapper) wrapper.classList.add('selected');
+        return true;
+      },
+    },
+    {
+      key: 'ArrowUp',
+      run: (view) => {
+        const cursor = view.state.selection.main.head;
+        const line = view.state.doc.lineAt(cursor);
+        if (line.number === 1) {
+          view.contentDOM.blur();
+          const wrapper = view.dom.parentElement;
+          window.dispatchEvent(new CustomEvent('cm-step-out', { detail: { direction: 'up', wrapper } }));
+          return true;
+        }
+        return false;
+      },
+    },
+    {
+      key: 'ArrowDown',
+      run: (view) => {
+        const cursor = view.state.selection.main.head;
+        const line = view.state.doc.lineAt(cursor);
+        if (line.number === view.state.doc.lines) {
+          view.contentDOM.blur();
+          const wrapper = view.dom.parentElement;
+          window.dispatchEvent(new CustomEvent('cm-step-out', { detail: { direction: 'down', wrapper } }));
+          return true;
+        }
+        return false;
       },
     },
     {

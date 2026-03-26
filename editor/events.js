@@ -523,29 +523,42 @@ function createTextareaElement(markdown, totalHeight, firstTag, parent, insertBe
 function handleEnter(e) {
     e.preventDefault();
     pushUndo();
-    let selectedItems = document.getElementsByClassName('selected');
-    // 1. Combine HTML from all selected elements
-    let combinedHTML = '';
-    for (let item of selectedItems) {
-        combinedHTML += item.outerHTML;
+    let selectedItems = Array.from(document.getElementsByClassName('selected'));
+
+    // 1. Extract markdown from each selected block, handling editors and rendered blocks
+    const markdownParts = [];
+    let firstRenderedTag = null;
+    for (const item of selectedItems) {
+        if (item.tagName === 'TEXTAREA') {
+            markdownParts.push(item.value);
+        } else if (item.classList && item.classList.contains('cm-wrapper')) {
+            // Extract text directly from the CM editor instance
+            if (item._cmView) {
+                markdownParts.push(item._cmView.state.doc.toString());
+            } else {
+                markdownParts.push(item.getAttribute('data-markdown-text') || '');
+            }
+        } else {
+            if (!firstRenderedTag) firstRenderedTag = item.tagName;
+            markdownParts.push(turndownService.turndown(item.outerHTML));
+        }
     }
+    const markdown = markdownParts.join('\n\n');
 
-    // 2. Convert combined HTML to Markdown
-    const markdown = turndownService.turndown(combinedHTML);
-
-    // 3. Get parent node and reference for insertion
+    // 2. Get parent node and reference for insertion
     const parent = selectedItems[0].parentNode;
-    const firstTag = selectedItems[0].tagName;
+    const firstTag = firstRenderedTag || selectedItems[0].tagName;
     const insertBeforeRef = selectedItems[selectedItems.length - 1].nextSibling;
 
-    // 4. Remove all selected elements
+    // 3. Remove all selected elements, destroying CM editors
     let totalHeight = 0;
-    while (selectedItems.length > 0) {
-        totalHeight += selectedItems[0].offsetHeight
-        selectedItems[0].remove();
+    for (const item of selectedItems) {
+        totalHeight += item.offsetHeight;
+        destroyCMEditor(item);
+        item.remove();
     }
 
-    // 5. Create edit element (CodeMirror or textarea fallback)
+    // 4. Create edit element (CodeMirror or textarea fallback)
     const editEl = createEditElement(markdown, totalHeight, firstTag, parent, insertBeforeRef);
 
     // make edit element selectable when blurred
@@ -624,10 +637,8 @@ function handleTextareaEvent(e, textarea) {
     }
     else if (e.key === "Escape") {
         e.preventDefault();
-        pushUndo();
-        const savedIndex = currentSelectedIndex;
-        const insertedNodes = renderMarkdownPartial(textarea);
-        selectInsertedNodes(insertedNodes, savedIndex);
+        textarea.blur();
+        textarea.classList.add('selected');
     }
     else if (e.key === 'Tab') {
         e.preventDefault();
