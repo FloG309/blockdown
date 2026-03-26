@@ -88,6 +88,98 @@ All four features are interaction-heavy (keypresses, mouse drags, DOM state), so
 
 ---
 
+## Feature 5: Mermaid Diagram Rendering
+
+**Problem:** Mermaid code blocks (` ```mermaid `) render as plain `<pre><code>` blocks like any other code. There is no way to visualize flowcharts, sequence diagrams, etc.
+
+**Goal:** Detect mermaid code blocks after markdown rendering and replace them with interactive SVG diagrams inside a resizable, zoomable, pannable container.
+
+### 5a: Rendering
+
+- Load **Mermaid.js** from CDN (same pattern as Marked.js/Turndown)
+- After `marked.parse()` produces `<pre><code class="language-mermaid">`, intercept and call `mermaid.render()` to produce an inline SVG
+- Wrap each rendered SVG in a `.mermaid-container` div that acts as the viewport
+- Apply to both initial render and `renderMarkdownPartial()` (textarea → rendered block)
+
+### 5b: Resizable Container
+
+- Custom drag handles at all 4 corners of `.mermaid-container`
+- Small visual indicators (e.g. triangular or square grip icons) at each corner
+- `mousedown` on a handle → `mousemove` updates container width/height → `mouseup` commits
+- Container has `overflow: hidden` so the SVG is clipped to the viewport
+- Default size: auto-fit to SVG content with a `max-height` cap; user resizes from there
+- Min size constraint to prevent collapsing the container to nothing
+
+### 5c: Zoom
+
+- `wheel` event on `.mermaid-container` adjusts a scale factor applied via CSS `transform: scale()`
+- Zoom toward cursor position using `transform-origin` computed from pointer coordinates
+- Clamp scale to a reasonable range (e.g. 0.25x – 4x)
+- Visual zoom level indicator (optional, e.g. small "150%" label in a corner)
+
+### 5d: Pan / Navigate
+
+- Click+drag inside `.mermaid-container` to pan (translate the SVG)
+- Track both `scale` and `translate(x, y)`, combine into a single CSS `transform`
+- `cursor: grab` at rest, `cursor: grabbing` while dragging
+- Pan gestures must NOT trigger block selection or rubber band — stop propagation from inside the container
+- **Double-click** to reset zoom to 1x and pan to origin (0, 0)
+
+### 5e: Edit Cycle Integration
+
+- Pressing **Enter** on a selected mermaid block opens a textarea with the raw mermaid source (same as other blocks)
+- **Escape** or **Shift+Enter** re-renders the mermaid source back into an interactive SVG container
+- The container's resize/zoom/pan state resets on re-render (fresh diagram, fresh viewport)
+- Each mermaid block maintains its own independent container with its own zoom/pan state
+
+### Affected areas
+
+- `editor.html` — add Mermaid.js CDN `<script>` tag
+- `base.js` — call `mermaid.initialize()` on load
+- `events.js` — hook into `renderMarkdownPartial()` and initial render to detect and transform mermaid blocks
+- `styles.css` — `.mermaid-container`, resize handles, cursor states, zoom indicator
+- New file: `editor/mermaid.js` — all mermaid-specific logic (render, resize, zoom, pan) to keep it modular
+
+### Implementation order
+
+1. Basic rendering (5a) — mermaid blocks become SVGs
+2. Resizable container with corner handles (5b)
+3. Zoom via scroll wheel (5c)
+4. Pan via click+drag, double-click reset (5d)
+5. Edit cycle integration and testing (5e)
+
+---
+
+## Bug Fix 1: Mermaid Event Listener Cleanup
+
+**Problem:** When a mermaid container is replaced during the edit cycle (Enter → edit → Escape/Shift+Enter), the `mousemove` and `mouseup` listeners that were added to `document` for resize/pan are never removed. Over repeated edits this causes memory leaks and potential ghost interactions from stale handlers.
+
+**Goal:** Before replacing a mermaid container (in `enterMermaidEditMode()` or anywhere a container is removed from the DOM), clean up all document-level event listeners that were attached by that container's resize and pan logic.
+
+**Affected area:** `mermaid.js` — `setupResize()`, `setupZoomPan()`, and `enterMermaidEditMode()`.
+
+---
+
+## Bug Fix 2: Mermaid Syntax Error UI Feedback
+
+**Problem:** When a user writes invalid mermaid syntax, `mermaid.render()` throws and the error is logged to `console.error()` only. The `<pre><code>` block remains unchanged with no visual indication that rendering failed. The user has no way to know the diagram is broken without opening DevTools.
+
+**Goal:** Show an inline error message to the user when mermaid rendering fails. Display the error text in a styled error block (e.g. red-bordered container with the error message) so the user can see what went wrong and fix their syntax.
+
+**Affected area:** `mermaid.js` — `processMermaidBlocks()` catch block. `styles.css` — new `.mermaid-error` styling.
+
+---
+
+## Bug Fix 3: Encapsulate Global State
+
+**Problem:** `selectableElements`, `currentSelectedIndex`, and `turndownService` are bare globals defined in `base.js` and mutated freely across `events.js`, `rubberband.js`, and `mermaid.js`. This makes the code fragile — any script can silently overwrite state, and there's no single place to inspect or debug state changes.
+
+**Goal:** Wrap shared state in a single `EditorState` object (or module-pattern namespace) that all files reference. Provide getter/setter functions so state changes are explicit and could later support logging or undo hooks.
+
+**Affected area:** `base.js` (define the state object), `events.js`, `rubberband.js`, `mermaid.js` (update all references).
+
+---
+
 ## Open questions
 
 - [ ] Should Escape render or just blur? (Feature 3 — see above)

@@ -70,6 +70,7 @@ function renderMarkdownPartial(textarea) {
             // Still run forward-merge in case the next sibling is also a same-type list
             const resultNodes = mergeAdjacentLists(insertedNodes, parent, false);
             setupSelectionHandlers();
+            processMermaidBlocks(parent);
             return resultNodes;
         }
     }
@@ -96,6 +97,10 @@ function renderMarkdownPartial(textarea) {
     const resultNodes = mergeAdjacentLists(insertedNodes, parent, false);
 
     setupSelectionHandlers();
+
+    // Process any mermaid code blocks that were just inserted
+    processMermaidBlocks(parent);
+
     return resultNodes;
 }
 
@@ -145,14 +150,18 @@ function findClosestSelectableParent(element) {
         if (selectableTypes.includes(current.tagName)) {
             return current;
         }
+        if (current.classList && current.classList.contains('mermaid-container')) {
+            return current;
+        }
         current = current.parentElement;
     }
     return null;
 }
 
-// Deselect all elements
+// Deselect all elements (blurred textareas keep .selected for multi-edit visibility)
 function deselectAll() {
     selectableElements.forEach(el => {
+        if (el.tagName === 'TEXTAREA' && el !== document.activeElement) return;
         el.classList.remove('selected');
     });
 }
@@ -160,7 +169,7 @@ function deselectAll() {
 // Set up click handlers for selectable elements
 function setupSelectionHandlers() {
     // Get all potential selectable elements - focus on block-level elements
-    selectableElements = Array.from(preview.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6, :scope > p, :scope > ul, :scope > ol, :scope > pre, :scope > blockquote, :scope > table, :scope > hr, :scope > textarea'));
+    selectableElements = Array.from(preview.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6, :scope > p, :scope > ul, :scope > ol, :scope > pre, :scope > blockquote, :scope > table, :scope > hr, :scope > textarea, :scope > .mermaid-container'));
 
     // Add click event to each element
     selectableElements.forEach((el, index) => {
@@ -171,8 +180,17 @@ function setupSelectionHandlers() {
             // Deselect all other elements
             deselectAll();
 
-            // Select only this element
-            toggleSelection(this);
+            if (this.tagName === 'TEXTAREA') {
+                // Clicking a textarea re-focuses it — focus/blur handlers manage .selected
+                this.focus();
+            } else {
+                // Blur any focused textarea so keyboard navigation returns to block mode
+                const focused = document.activeElement;
+                if (focused && focused.tagName === 'TEXTAREA') {
+                    focused.blur();
+                }
+                toggleSelection(this);
+            }
             currentSelectedIndex = parseInt(this.getAttribute('data-index'));
         });
     });
@@ -296,7 +314,11 @@ function handleShiftEnter(e) {
 
 function handleEnter(e) {
     e.preventDefault();
-    let selectedItems = document.getElementsByClassName('selected');
+    // Filter out textareas — they're already in edit mode (multi-edit support)
+    let selectedItems = Array.from(document.getElementsByClassName('selected'))
+        .filter(el => el.tagName !== 'TEXTAREA');
+    if (selectedItems.length === 0) return;
+
     // 1. Combine HTML from all selected elements
     let combinedHTML = '';
     for (let item of selectedItems) {
@@ -312,9 +334,9 @@ function handleEnter(e) {
 
     // 4. Remove all selected elements
     let totalHeight = 0;
-    while (selectedItems.length > 0) {
-        totalHeight += selectedItems[0].offsetHeight
-        selectedItems[0].remove();
+    for (const item of selectedItems) {
+        totalHeight += item.offsetHeight;
+        item.remove();
     }
 
     // 5. Create a textarea and insert it where the first element was
@@ -337,6 +359,14 @@ function handleEnter(e) {
         parent.appendChild(textarea);
     }
 
+    // Multi-edit: mark textarea when blurred, unmark when focused
+    textarea.addEventListener('focus', function() {
+        this.classList.remove('selected');
+    });
+    textarea.addEventListener('blur', function() {
+        if (this.parentNode) this.classList.add('selected');
+    });
+
     // set cursor
     textarea.focus()
 
@@ -357,6 +387,12 @@ function handleClick(e) {
     // Find the closest selectable parent
     const closestSelectable = findClosestSelectableParent(this);
     if (closestSelectable) {
+        // Blur any focused textarea so keyboard navigation returns to block mode
+        const focused = document.activeElement;
+        if (focused && focused.tagName === 'TEXTAREA') {
+            focused.blur();
+        }
+
         // Deselect all other elements
         deselectAll();
 
@@ -405,6 +441,14 @@ function insertTextArea(e, insertBefore = true) {
 
     // Deselect all other elements
     deselectAll();
+
+    // Multi-edit: mark textarea when blurred, unmark when focused
+    textarea.addEventListener('focus', function() {
+        this.classList.remove('selected');
+    });
+    textarea.addEventListener('blur', function() {
+        if (this.parentNode) this.classList.add('selected');
+    });
 
     // set cursor
     textarea.focus()

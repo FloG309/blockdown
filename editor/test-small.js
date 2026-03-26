@@ -3,34 +3,49 @@ var currentSelectedIndex = -1;
 var turndownService = new TurndownService();
 
 let markdownText = `
-## Welcome to the Markdown Editor
+## Small Mermaid Graph Test
 
-This is a *lightweight* editor that renders **Markdown** on demand.
+A simple login flow:
 
-### Features:
-- Press **Ctrl+Enter** to render the markdown
-- Simple and fast interface
-- Live preview updates when you press the shortcut
-
-#### Code Example
-\`\`\`javascript
-function hello() {
-    console.log("Hello, Markdown!");
-}
-\`\`\`
-
-#### Mermaid Diagram
 \`\`\`mermaid
-graph TD
-    A[Start] --> B{Decision}
-    B -->|Yes| C[Do something]
-    B -->|No| D[Do something else]
-    C --> E[End]
-    D --> E
+graph LR
+    A[User] --> B[Login Page]
+    B --> C{Valid?}
+    C -->|Yes| D[Dashboard]
+    C -->|No| B
 \`\`\`
 
-> Press Ctrl+Enter to see the rendered markdown.
-`
+### Sequence Diagram
+
+A basic API call:
+
+\`\`\`mermaid
+sequenceDiagram
+    Client->>Server: GET /api/data
+    Server->>DB: SELECT * FROM items
+    DB-->>Server: rows
+    Server-->>Client: 200 OK (JSON)
+\`\`\`
+
+### Pie Chart
+
+\`\`\`mermaid
+pie title Browser Market Share
+    "Chrome" : 65
+    "Safari" : 19
+    "Firefox" : 4
+    "Edge" : 4
+    "Other" : 8
+\`\`\`
+
+### Some regular content
+
+- Item one
+- Item two
+- Item three
+
+> This page tests small, simple mermaid diagrams.
+`;
 
 turndownService.addRule('fencedCodeBlock', {
     filter: function (node, options) {
@@ -53,12 +68,9 @@ turndownService.addRule('fencedCodeBlock', {
     }
 });
 
-// Ensure fenced code block style is used
 turndownService.options.codeBlockStyle = 'fenced';
-// Use dashes for bullet lists (classic markdown style)
 turndownService.options.bulletListMarker = '-';
 
-// Turndown rule: convert mermaid containers back to fenced mermaid code blocks
 turndownService.addRule('mermaidContainer', {
     filter: function (node) {
         return node.nodeName === 'DIV' && node.classList.contains('mermaid-container');
@@ -72,23 +84,15 @@ turndownService.addRule('mermaidContainer', {
 document.addEventListener('DOMContentLoaded', function() {
     const preview = document.getElementById('preview');
 
-    // Initialize mermaid
     initMermaid();
 
-    // Function to render markdown to HTML
     async function renderMarkdown() {
         const html = marked.parse(markdownText);
         preview.innerHTML = html;
-
-        // Replace mermaid code blocks with rendered SVG diagrams
         await processMermaidBlocks(preview);
-
-        // After rendering, set up click handlers for all elements
         setupSelectionHandlers();
     }
 
-
-    // Handle keyboard navigation for marking several cells (shift + arrow)
     let lastKey = null;
     let lastKeyTime = 0;
     document.addEventListener('keydown', function(e) {
@@ -96,28 +100,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const isTextarea = e.target.tagName === 'TEXTAREA';
         const isInput = e.target.tagName === 'INPUT' || e.target.isContentEditable;
 
-        // Handle keys for form inputs form inputs
         if (isTextarea || isInput) return;
 
-        // Handle delete option
-
         if (e.key === 'd') {
-            if (lastKey === 'd' && (now - lastKeyTime) < 1000) {  // 400ms threshold
-                // Double 'd' detected — perform delete
-                console.log('Double D pressed: delete triggered!');
+            if (lastKey === 'd' && (now - lastKeyTime) < 1000) {
                 const selectedElements = document.querySelectorAll('.selected');
                 selectedElements.forEach(el => el.remove());
-                lastKey = null;  // reset
+                lastKey = null;
             } else {
                 lastKey = 'd';
                 lastKeyTime = now;
             }
         } else {
-            // Reset if a different key is pressed
             lastKey = null;
         }
 
-        //handle special case where textarea is selected, but not focused (== no active cursor)
         const selectedElement = selectableElements[currentSelectedIndex]
         if (selectedElement && selectedElement.tagName === 'TEXTAREA') {
             if (e.key === 'Enter') {
@@ -128,31 +125,16 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Only handle if Ctrl key is pressed
         if (e.shiftKey) {
-            if (e.key === 'ArrowUp') {
-                handleShiftArrowUp(e)
-            } else if (e.key === 'ArrowDown') {
-                handleShiftArrowDown(e)
-            }
+            if (e.key === 'ArrowUp') handleShiftArrowUp(e);
+            else if (e.key === 'ArrowDown') handleShiftArrowDown(e);
         }
-        else if (e.key === 'ArrowUp') {
-            handleArrowUp(e)
-        }
-        else if (e.key === 'ArrowDown') {
-            handleArrowDown(e)
-        }
-        else if (e.key === 'Enter') {
-            handleEnter(e)
-        }
-        else if (e.key === 'a') {
-            insertTextArea(e, insertBefore = true)
-        }
-        else if (e.key === 'b') {
-            insertTextArea(e, insertBefore = false)
-        }
+        else if (e.key === 'ArrowUp') handleArrowUp(e);
+        else if (e.key === 'ArrowDown') handleArrowDown(e);
+        else if (e.key === 'Enter') handleEnter(e);
+        else if (e.key === 'a') insertTextArea(e, insertBefore = true);
+        else if (e.key === 'b') insertTextArea(e, insertBefore = false);
     });
 
-    // Initial render
     renderMarkdown();
 });
