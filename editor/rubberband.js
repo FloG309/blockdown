@@ -104,7 +104,7 @@
             }
 
             let lastSelectedIndex = -1;
-            selectableElements.forEach((el, index) => {
+            EditorState.selectableElements.forEach((el, index) => {
                 // Skip textareas and CM editors in rubber band selection
                 if (el.tagName === 'TEXTAREA') return;
                 if (el.classList && el.classList.contains('cm-wrapper')) return;
@@ -116,9 +116,9 @@
                 }
             });
 
-            // Set currentSelectedIndex to the bottommost selected block
+            // Set EditorState.currentSelectedIndex to the bottommost selected block
             if (lastSelectedIndex !== -1) {
-                currentSelectedIndex = lastSelectedIndex;
+                EditorState.currentSelectedIndex = lastSelectedIndex;
             }
         });
     });

@@ -1,6 +1,12 @@
-var selectableElements = [];
-var currentSelectedIndex = -1;
-var turndownService = new TurndownService();
+// Shared editor state — all files reference this object instead of bare globals
+var EditorState = {
+    selectableElements: [],
+    currentSelectedIndex: -1,
+    turndownService: new TurndownService(),
+    blockClipboard: [],
+    undoStack: [],
+    redoStack: []
+};
 
 let markdownText = `
 ## Welcome to the Markdown Editor
@@ -32,7 +38,7 @@ graph TD
 > Press Ctrl+Enter to see the rendered markdown.
 `
 
-turndownService.addRule('fencedCodeBlock', {
+EditorState.turndownService.addRule('fencedCodeBlock', {
     filter: function (node, options) {
         return (
         options.codeBlockStyle === 'fenced' &&
@@ -54,15 +60,15 @@ turndownService.addRule('fencedCodeBlock', {
 });
 
 // Ensure fenced code block style is used
-turndownService.options.codeBlockStyle = 'fenced';
+EditorState.turndownService.options.codeBlockStyle = 'fenced';
 // Use dashes for bullet lists (classic markdown style)
-turndownService.options.bulletListMarker = '-';
+EditorState.turndownService.options.bulletListMarker = '-';
 // Use ATX-style headings (## heading) instead of setext (underline) —
 // required for CodeMirror line decorations to detect heading lines
-turndownService.options.headingStyle = 'atx';
+EditorState.turndownService.options.headingStyle = 'atx';
 
 // Turndown rule: convert mermaid containers back to fenced mermaid code blocks
-turndownService.addRule('mermaidContainer', {
+EditorState.turndownService.addRule('mermaidContainer', {
     filter: function (node) {
         return node.nodeName === 'DIV' && node.classList.contains('mermaid-container');
     },
@@ -177,7 +183,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Handle special case where textarea/CM wrapper is selected but not focused
-        const selectedElement = selectableElements[currentSelectedIndex]
+        const selectedElement = EditorState.selectableElements[EditorState.currentSelectedIndex]
         if (selectedElement && selectedElement.tagName === 'TEXTAREA') {
             if (e.key === 'Enter' && !e.ctrlKey) {
                 e.preventDefault();
@@ -251,20 +257,20 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('cm-step-out', (e) => {
         const { direction, wrapper } = e.detail;
         setupSelectionHandlers();
-        const wrapperIndex = selectableElements.indexOf(wrapper);
+        const wrapperIndex = EditorState.selectableElements.indexOf(wrapper);
         if (wrapperIndex === -1) return;
 
         let targetIndex;
         if (direction === 'up') {
             targetIndex = Math.max(0, wrapperIndex - 1);
         } else {
-            targetIndex = Math.min(selectableElements.length - 1, wrapperIndex + 1);
+            targetIndex = Math.min(EditorState.selectableElements.length - 1, wrapperIndex + 1);
         }
 
         deselectAll();
-        selectableElements[targetIndex].classList.add('selected');
-        currentSelectedIndex = targetIndex;
-        selectableElements[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        EditorState.selectableElements[targetIndex].classList.add('selected');
+        EditorState.currentSelectedIndex = targetIndex;
+        EditorState.selectableElements[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 
     // Initial render

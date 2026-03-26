@@ -301,7 +301,7 @@ function setupZoomPan(container) {
             deselectAll();
             container.classList.add('selected');
             const idx = parseInt(container.getAttribute('data-index'));
-            if (!isNaN(idx)) currentSelectedIndex = idx;
+            if (!isNaN(idx)) EditorState.currentSelectedIndex = idx;
         }
     };
 
@@ -450,7 +450,7 @@ function enterMermaidEditMode(container) {
     textarea.addEventListener('keydown', function(e) {
         if ((e.key === 'Enter' && e.shiftKey) || e.key === 'Escape') {
             e.preventDefault();
-            const savedIndex = currentSelectedIndex;
+            const savedIndex = EditorState.currentSelectedIndex;
             const insertedNodes = renderMarkdownPartial(textarea);
             selectInsertedNodes(insertedNodes, savedIndex);
         } else if (e.key === 'Tab') {

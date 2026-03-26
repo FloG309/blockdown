@@ -72,11 +72,13 @@ plan.md              — Feature plan and implementation roadmap
 4. **rubberband.js** — IIFE that adds mousedown/move/up listeners for drag-selection with a visual overlay.
 5. **styles.css** — Selected state uses `#e1f0ff` background. Inner elements of compound blocks have `pointer-events: none`.
 
-### Key Globals (defined in base.js, used across files)
+### Shared State (defined in base.js as `EditorState`, used across files)
 
-- `selectableElements` — Array of current block-level DOM elements in `#preview`
-- `currentSelectedIndex` — Index of the currently focused block
-- `turndownService` — Shared TurndownService instance
+- `EditorState.selectableElements` — Array of current block-level DOM elements in `#preview`
+- `EditorState.currentSelectedIndex` — Index of the currently focused block
+- `EditorState.turndownService` — Shared TurndownService instance
+- `EditorState.blockClipboard` — Internal clipboard for block copy/paste
+- `EditorState.undoStack` / `EditorState.redoStack` — Snapshot-based undo/redo stacks
 
 ## Workflow Rules
 

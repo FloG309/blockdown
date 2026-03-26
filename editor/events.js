@@ -2,17 +2,14 @@
 // ~~~~~~~~~~~~~~~~~~Helper Functions~~~~~~~~~~~~~~~~~~~~~~~
 //----------------------------------------------------------
 
-// Internal block clipboard (array of markdown strings)
-var blockClipboard = [];
-
 // Copy selected blocks to internal clipboard
 function copyBlocks() {
     const selectedItems = document.querySelectorAll('.selected');
     if (selectedItems.length === 0) return;
 
-    blockClipboard = [];
+    EditorState.blockClipboard = [];
     selectedItems.forEach(el => {
-        blockClipboard.push(turndownService.turndown(el.outerHTML));
+        EditorState.blockClipboard.push(EditorState.turndownService.turndown(el.outerHTML));
     });
 }
 
@@ -27,17 +24,17 @@ function cutBlocks() {
     // Delete the selected blocks
     selectedItems.forEach(el => el.remove());
     setupSelectionHandlers();
-    currentSelectedIndex = Math.min(currentSelectedIndex, selectableElements.length - 1);
+    EditorState.currentSelectedIndex = Math.min(EditorState.currentSelectedIndex, EditorState.selectableElements.length - 1);
 }
 
 // Paste blocks from internal clipboard below current selection
 function pasteBlocks() {
-    if (blockClipboard.length === 0) return;
+    if (EditorState.blockClipboard.length === 0) return;
 
     pushUndo();
 
     const preview = document.getElementById('preview');
-    const markdown = blockClipboard.join('\n\n');
+    const markdown = EditorState.blockClipboard.join('\n\n');
     const html = marked.parse(markdown);
 
     const temp = document.createElement('div');
@@ -45,8 +42,8 @@ function pasteBlocks() {
 
     // Find insertion point: after the last selected element, or at the end
     let refNode = null;
-    if (currentSelectedIndex >= 0 && currentSelectedIndex < selectableElements.length) {
-        refNode = selectableElements[currentSelectedIndex].nextSibling;
+    if (EditorState.currentSelectedIndex >= 0 && EditorState.currentSelectedIndex < EditorState.selectableElements.length) {
+        refNode = EditorState.selectableElements[EditorState.currentSelectedIndex].nextSibling;
     }
 
     const insertedNodes = [];
@@ -70,11 +67,11 @@ function pasteBlocks() {
     resultNodes.forEach(node => {
         if (node.parentNode) node.classList.add('selected');
     });
-    // Set currentSelectedIndex to the last pasted block
+    // Set EditorState.currentSelectedIndex to the last pasted block
     const lastNode = resultNodes[resultNodes.length - 1];
     if (lastNode) {
         const idx = parseInt(lastNode.getAttribute('data-index'));
-        if (!isNaN(idx)) currentSelectedIndex = idx;
+        if (!isNaN(idx)) EditorState.currentSelectedIndex = idx;
     }
 }
 
@@ -193,7 +190,7 @@ function renderMarkdownPartial(element) {
     if (isIndentedList) {
         const prevSibling = element.previousElementSibling;
         if (prevSibling && (prevSibling.tagName === 'UL' || prevSibling.tagName === 'OL')) {
-            const prevMarkdown = turndownService.turndown(prevSibling.outerHTML);
+            const prevMarkdown = EditorState.turndownService.turndown(prevSibling.outerHTML);
             const combinedMarkdown = prevMarkdown + '\n' + markdownText;
             const html = marked.parse(combinedMarkdown);
 
@@ -321,7 +318,7 @@ function findClosestSelectableParent(element) {
 
 // Deselect all elements (blurred textareas keep .selected for multi-edit visibility)
 function deselectAll() {
-    selectableElements.forEach(el => {
+    EditorState.selectableElements.forEach(el => {
         if (el.tagName === 'TEXTAREA' && el !== document.activeElement) return;
         el.classList.remove('selected');
     });
@@ -330,10 +327,10 @@ function deselectAll() {
 // Set up click handlers for selectable elements
 function setupSelectionHandlers() {
     // Get all potential selectable elements - include .cm-wrapper and .mermaid-container
-    selectableElements = Array.from(preview.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6, :scope > p, :scope > ul, :scope > ol, :scope > pre, :scope > blockquote, :scope > table, :scope > hr, :scope > textarea, :scope > .cm-wrapper, :scope > .mermaid-container'));
+    EditorState.selectableElements = Array.from(preview.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6, :scope > p, :scope > ul, :scope > ol, :scope > pre, :scope > blockquote, :scope > table, :scope > hr, :scope > textarea, :scope > .cm-wrapper, :scope > .mermaid-container'));
 
     // Add click event to each element
-    selectableElements.forEach((el, index) => {
+    EditorState.selectableElements.forEach((el, index) => {
         el.setAttribute('data-index', index);
         el.addEventListener('click', function(e) {
             e.stopPropagation();
@@ -351,7 +348,7 @@ function setupSelectionHandlers() {
                 }
                 toggleSelection(this);
             }
-            currentSelectedIndex = parseInt(this.getAttribute('data-index'));
+            EditorState.currentSelectedIndex = parseInt(this.getAttribute('data-index'));
         });
     });
 
@@ -363,7 +360,7 @@ function setupSelectionHandlers() {
         });
     });
 
-    currentSelectedIndex = -1;
+    EditorState.currentSelectedIndex = -1;
 }
 
 // Toggle selection state of an element
@@ -378,78 +375,78 @@ function toggleSelection(element) {
 
 function handleArrowUp(e) {
     e.preventDefault();
-    let newIndex = currentSelectedIndex;
+    let newIndex = EditorState.currentSelectedIndex;
     if (newIndex === -1) {
-        newIndex = selectableElements.length - 1;
+        newIndex = EditorState.selectableElements.length - 1;
     } else {
         newIndex = Math.max(0, newIndex - 1);
     }
 
-    const targetElement = selectableElements[newIndex];
+    const targetElement = EditorState.selectableElements[newIndex];
     deselectAll();
     targetElement.classList.add('selected');
-    currentSelectedIndex = newIndex;
+    EditorState.currentSelectedIndex = newIndex;
 
     targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function handleArrowDown(e) {
     e.preventDefault();
-    let newIndex = currentSelectedIndex;
+    let newIndex = EditorState.currentSelectedIndex;
     if (newIndex === -1) {
         newIndex = 0;
     } else {
-        newIndex = Math.min(selectableElements.length - 1, newIndex + 1);
+        newIndex = Math.min(EditorState.selectableElements.length - 1, newIndex + 1);
     }
 
-    const targetElement = selectableElements[newIndex];
+    const targetElement = EditorState.selectableElements[newIndex];
     deselectAll();
     targetElement.classList.add('selected');
-    currentSelectedIndex = newIndex;
+    EditorState.currentSelectedIndex = newIndex;
 
     targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function handleShiftArrowUp(e) {
     e.preventDefault();
-    let newIndex = currentSelectedIndex;
+    let newIndex = EditorState.currentSelectedIndex;
     if (newIndex === -1) {
-        newIndex = selectableElements.length - 1;
+        newIndex = EditorState.selectableElements.length - 1;
     } else {
         newIndex = Math.max(0, newIndex - 1);
     }
 
-    const targetElement = selectableElements[newIndex];
+    const targetElement = EditorState.selectableElements[newIndex];
     if (targetElement.classList.contains('selected') && newIndex != 0) {
-        const currentElement = selectableElements[currentSelectedIndex];
+        const currentElement = EditorState.selectableElements[EditorState.currentSelectedIndex];
         currentElement.classList.remove('selected');
     }
     else {
         targetElement.classList.add('selected');
     }
-    currentSelectedIndex = newIndex;
+    EditorState.currentSelectedIndex = newIndex;
 
     targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function handleShiftArrowDown(e) {
     e.preventDefault();
-    let newIndex = currentSelectedIndex;
+    let newIndex = EditorState.currentSelectedIndex;
     if (newIndex === -1) {
         newIndex = 0;
     } else {
-        newIndex = Math.min(selectableElements.length - 1, newIndex + 1);
+        newIndex = Math.min(EditorState.selectableElements.length - 1, newIndex + 1);
     }
 
-    const targetElement = selectableElements[newIndex];
-    if (targetElement.classList.contains('selected') && newIndex != selectableElements.length - 1) {
-        const currentElement = selectableElements[currentSelectedIndex];
+    const targetElement = EditorState.selectableElements[newIndex];
+    if (targetElement.classList.contains('selected') && newIndex != EditorState.selectableElements.length - 1) {
+        const currentElement = EditorState.selectableElements[EditorState.currentSelectedIndex];
         currentElement.classList.remove('selected');
     }
     else {
         targetElement.classList.add('selected');
     }
-    currentSelectedIndex = newIndex;
+    EditorState.currentSelectedIndex = newIndex;
 
     targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -482,7 +479,7 @@ function createEditElement(markdown, totalHeight, firstTag, parent, insertBefore
         const onExit = (text) => {
             wrapper.setAttribute('data-markdown-text', text);
             pushUndo();
-            const savedIndex = currentSelectedIndex;
+            const savedIndex = EditorState.currentSelectedIndex;
             const insertedNodes = renderMarkdownPartial(wrapper);
             selectInsertedNodes(insertedNodes, savedIndex);
         };
@@ -567,7 +564,7 @@ function handleEnter(e) {
             }
         } else {
             if (!firstRenderedTag) firstRenderedTag = item.tagName;
-            markdownParts.push(turndownService.turndown(item.outerHTML));
+            markdownParts.push(EditorState.turndownService.turndown(item.outerHTML));
         }
     }
     const markdown = markdownParts.join('\n\n');
@@ -589,9 +586,9 @@ function handleEnter(e) {
     const editEl = createEditElement(markdown, totalHeight, firstTag, parent, insertBeforeRef);
 
     // make edit element selectable when blurred
-    saveIndex = currentSelectedIndex;
+    saveIndex = EditorState.currentSelectedIndex;
     setupSelectionHandlers();
-    currentSelectedIndex = saveIndex;
+    EditorState.currentSelectedIndex = saveIndex;
 }
 
 function handleClick(e) {
@@ -608,7 +605,7 @@ function handleClick(e) {
         deselectAll();
 
         toggleSelection(closestSelectable);
-        currentSelectedIndex = parseInt(closestSelectable.getAttribute('data-index'));
+        EditorState.currentSelectedIndex = parseInt(closestSelectable.getAttribute('data-index'));
     }
 }
 
@@ -623,11 +620,11 @@ function insertTextArea(e, insertBefore = true) {
     let newIndex;
     let insertElement;
     if (insertBefore) {
-        insertElement = selectableElements[currentSelectedIndex];
-        newIndex = currentSelectedIndex;
+        insertElement = EditorState.selectableElements[EditorState.currentSelectedIndex];
+        newIndex = EditorState.currentSelectedIndex;
     } else {
-        insertElement = selectableElements[currentSelectedIndex + 1];
-        newIndex = currentSelectedIndex + 1;
+        insertElement = EditorState.selectableElements[EditorState.currentSelectedIndex + 1];
+        newIndex = EditorState.currentSelectedIndex + 1;
     }
 
     // Create edit element (CodeMirror or textarea fallback)
@@ -636,7 +633,7 @@ function insertTextArea(e, insertBefore = true) {
     deselectAll();
 
     setupSelectionHandlers();
-    currentSelectedIndex = newIndex;
+    EditorState.currentSelectedIndex = newIndex;
 }
 
 
@@ -652,9 +649,9 @@ function selectInsertedNodes(insertedNodes, savedIndex) {
         if (firstNode) {
             const idx = parseInt(firstNode.getAttribute('data-index'));
             if (!isNaN(idx)) {
-                currentSelectedIndex = idx;
+                EditorState.currentSelectedIndex = idx;
             } else {
-                currentSelectedIndex = savedIndex;
+                EditorState.currentSelectedIndex = savedIndex;
             }
         }
     }
@@ -664,7 +661,7 @@ function handleTextareaEvent(e, textarea) {
     if (e.key === 'Enter' && e.shiftKey) {
         e.preventDefault();
         pushUndo();
-        const savedIndex = currentSelectedIndex;
+        const savedIndex = EditorState.currentSelectedIndex;
         const insertedNodes = renderMarkdownPartial(textarea);
         selectInsertedNodes(insertedNodes, savedIndex);
     }
