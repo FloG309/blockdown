@@ -24,6 +24,8 @@ async function processMermaidBlocks(container) {
             // Check selection AFTER await — selectInsertedNodes may have run during the yield
             const wasSelected = pre.classList.contains('selected');
             const mermaidContainer = createMermaidContainer(svg, source);
+            // Clean up any existing mermaid container's document listeners before replacing
+            cleanupMermaidListeners(pre);
             pre.parentNode.replaceChild(mermaidContainer, pre);
 
             // Preserve selection state across the replacement
@@ -412,15 +414,26 @@ function setupResize(container) {
 
 // ── Helpers ─────────────────────────────────────────────────
 
+// Remove all document-level event listeners attached by a mermaid container's
+// zoom/pan and resize logic. Call before removing a container from the DOM.
+function cleanupMermaidListeners(container) {
+    if (container._onMouseMove) {
+        document.removeEventListener('mousemove', container._onMouseMove);
+        container._onMouseMove = null;
+    }
+    if (container._onMouseUp) {
+        document.removeEventListener('mouseup', container._onMouseUp);
+        container._onMouseUp = null;
+    }
+}
+
 // Enter edit mode for a single mermaid container (independent of other blocks)
 function enterMermaidEditMode(container) {
     const source = container.getAttribute('data-mermaid-source') || '';
     const parent = container.parentNode;
     const nextSibling = container.nextSibling;
 
-    // Clean up document-level listeners from this container's zoom/pan
-    if (container._onMouseMove) document.removeEventListener('mousemove', container._onMouseMove);
-    if (container._onMouseUp) document.removeEventListener('mouseup', container._onMouseUp);
+    cleanupMermaidListeners(container);
 
     const textarea = document.createElement('textarea');
     textarea.value = '```mermaid\n' + source + '\n```';
