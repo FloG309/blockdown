@@ -1166,3 +1166,482 @@ test.describe('Feature 9: CodeMirror edit mode', () => {
   });
 });
 
+// =============================================================
+// Feature 10: Mermaid Diagram Rendering
+// =============================================================
+
+// Helper: wait for mermaid processing to complete (async render)
+async function waitForMermaid(page) {
+  await page.waitForSelector('#preview .mermaid-container', { timeout: 10000 });
+}
+
+// Helper: navigate to the mermaid container block
+async function selectMermaidBlock(page) {
+  // Navigate down until we land on the mermaid container
+  const idx = await page.evaluate(() => {
+    const blocks = document.querySelectorAll('#preview > *');
+    for (let i = 0; i < blocks.length; i++) {
+      if (blocks[i].classList.contains('mermaid-container')) return i;
+    }
+    return -1;
+  });
+  expect(idx).toBeGreaterThan(-1);
+  // Press ArrowDown (idx + 1) times to select it (first ArrowDown selects index 0)
+  for (let i = 0; i <= idx; i++) {
+    await pressKey(page, 'ArrowDown');
+  }
+  // Verify it's selected
+  await expect(page.locator('#preview .mermaid-container.selected')).toHaveCount(1);
+}
+
+test.describe('Feature 10a: Mermaid Rendering', () => {
+
+  test('mermaid code block is replaced with an SVG container', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    // There should be a .mermaid-container in the preview
+    const container = page.locator('#preview .mermaid-container');
+    await expect(container).toHaveCount(1);
+
+    // The container should contain a rendered SVG
+    const svg = container.locator('svg');
+    await expect(svg).toHaveCount(1);
+
+    // No leftover <pre><code class="language-mermaid"> should remain
+    const mermaidCode = page.locator('#preview pre > code.language-mermaid');
+    await expect(mermaidCode).toHaveCount(0);
+  });
+
+  test('mermaid container has the correct structure', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    const container = page.locator('#preview .mermaid-container');
+
+    // Should have viewport > content > svg
+    await expect(container.locator('.mermaid-viewport')).toHaveCount(1);
+    await expect(container.locator('.mermaid-content')).toHaveCount(1);
+    await expect(container.locator('.mermaid-content svg')).toHaveCount(1);
+
+    // Should have 4 resize handles
+    await expect(container.locator('.mermaid-handle')).toHaveCount(4);
+    await expect(container.locator('.mermaid-handle-tl')).toHaveCount(1);
+    await expect(container.locator('.mermaid-handle-tr')).toHaveCount(1);
+    await expect(container.locator('.mermaid-handle-bl')).toHaveCount(1);
+    await expect(container.locator('.mermaid-handle-br')).toHaveCount(1);
+
+    // Should have a zoom indicator
+    await expect(container.locator('.mermaid-zoom-indicator')).toHaveCount(1);
+
+    // Should have button bar with edit and reset buttons
+    await expect(container.locator('.mermaid-btn-bar')).toHaveCount(1);
+    await expect(container.locator('.mermaid-btn')).toHaveCount(2);
+  });
+
+  test('mermaid source is stored as data attribute', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    const source = await page.locator('#preview .mermaid-container').getAttribute('data-mermaid-source');
+    expect(source).toContain('graph TD');
+    expect(source).toContain('A[Start]');
+  });
+
+  test('mermaid container is selectable via keyboard navigation', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    await selectMermaidBlock(page);
+    // Already verified by the helper
+  });
+});
+
+test.describe('Feature 10b: Resizable Container', () => {
+
+  test('resize handle drag changes container dimensions', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    // Select the container first so handles become visible (opacity: 1)
+    await selectMermaidBlock(page);
+
+    const beforeSize = await page.evaluate(() => {
+      const c = document.querySelector('.mermaid-container');
+      return { w: c.offsetWidth, h: c.offsetHeight };
+    });
+
+    // Programmatically simulate a drag on the bottom-right handle
+    await page.evaluate(() => {
+      const handle = document.querySelector('.mermaid-handle-br');
+      const rect = handle.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      handle.dispatchEvent(new MouseEvent('mousedown', { clientX: cx, clientY: cy, bubbles: true }));
+      document.dispatchEvent(new MouseEvent('mousemove', { clientX: cx + 80, clientY: cy + 60, bubbles: true }));
+      document.dispatchEvent(new MouseEvent('mouseup', { clientX: cx + 80, clientY: cy + 60, bubbles: true }));
+    });
+
+    const afterSize = await page.evaluate(() => {
+      const c = document.querySelector('.mermaid-container');
+      return { w: c.offsetWidth, h: c.offsetHeight };
+    });
+    expect(afterSize.w).toBeGreaterThan(beforeSize.w);
+    expect(afterSize.h).toBeGreaterThan(beforeSize.h);
+  });
+
+  test('container respects minimum size constraint', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    await selectMermaidBlock(page);
+
+    // Drag the bottom-right handle far to the top-left to shrink below minimum
+    await page.evaluate(() => {
+      const handle = document.querySelector('.mermaid-handle-br');
+      const rect = handle.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      handle.dispatchEvent(new MouseEvent('mousedown', { clientX: cx, clientY: cy, bubbles: true }));
+      document.dispatchEvent(new MouseEvent('mousemove', { clientX: cx - 800, clientY: cy - 800, bubbles: true }));
+      document.dispatchEvent(new MouseEvent('mouseup', { clientX: cx - 800, clientY: cy - 800, bubbles: true }));
+    });
+
+    const afterSize = await page.evaluate(() => {
+      const c = document.querySelector('.mermaid-container');
+      return { w: c.offsetWidth, h: c.offsetHeight };
+    });
+    // Min size is 100px per mermaid.js
+    expect(afterSize.w).toBeGreaterThanOrEqual(100);
+    expect(afterSize.h).toBeGreaterThanOrEqual(100);
+  });
+});
+
+test.describe('Feature 10c: Zoom', () => {
+
+  test('scroll wheel changes zoom level', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    // Dispatch wheel events directly on the viewport element for reliable behavior
+    const result = await page.evaluate(() => {
+      const c = document.querySelector('.mermaid-container');
+      const viewport = c.querySelector('.mermaid-viewport');
+      const initialScale = c._zoomPan.scale;
+
+      const rect = viewport.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      // Zoom in (negative deltaY)
+      for (let i = 0; i < 5; i++) {
+        viewport.dispatchEvent(new WheelEvent('wheel', {
+          deltaY: -100, clientX: cx, clientY: cy, bubbles: true, cancelable: true
+        }));
+      }
+
+      return { initialScale, afterScale: c._zoomPan.scale };
+    });
+
+    expect(result.afterScale).toBeGreaterThan(result.initialScale);
+  });
+
+  test('zoom level is clamped to max 4x', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    const scale = await page.evaluate(() => {
+      const c = document.querySelector('.mermaid-container');
+      const viewport = c.querySelector('.mermaid-viewport');
+      const rect = viewport.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      // Zoom in many times
+      for (let i = 0; i < 100; i++) {
+        viewport.dispatchEvent(new WheelEvent('wheel', {
+          deltaY: -120, clientX: cx, clientY: cy, bubbles: true, cancelable: true
+        }));
+      }
+
+      return c._zoomPan.scale;
+    });
+
+    expect(scale).toBeLessThanOrEqual(4);
+  });
+
+  test('zoom indicator shows percentage', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    const result = await page.evaluate(() => {
+      const c = document.querySelector('.mermaid-container');
+      const viewport = c.querySelector('.mermaid-viewport');
+      const indicator = c.querySelector('.mermaid-zoom-indicator');
+      const initialText = indicator.textContent;
+
+      const rect = viewport.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      // Zoom in
+      for (let i = 0; i < 5; i++) {
+        viewport.dispatchEvent(new WheelEvent('wheel', {
+          deltaY: -100, clientX: cx, clientY: cy, bubbles: true, cancelable: true
+        }));
+      }
+
+      return { initialText, afterText: indicator.textContent };
+    });
+
+    expect(result.initialText).toMatch(/\d+%/);
+    expect(result.afterText).toMatch(/\d+%/);
+    expect(parseInt(result.afterText)).toBeGreaterThan(parseInt(result.initialText));
+  });
+});
+
+test.describe('Feature 10d: Pan / Navigate', () => {
+
+  test('click+drag pans the diagram', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    // Dispatch mouse events directly on the viewport for reliable pan behavior
+    const result = await page.evaluate(() => {
+      const c = document.querySelector('.mermaid-container');
+      const viewport = c.querySelector('.mermaid-viewport');
+      const rect = viewport.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      const before = { x: c._zoomPan.translateX, y: c._zoomPan.translateY };
+
+      // Simulate drag: mousedown → mousemove → mouseup
+      viewport.dispatchEvent(new MouseEvent('mousedown', {
+        clientX: cx, clientY: cy, bubbles: true, cancelable: true
+      }));
+      document.dispatchEvent(new MouseEvent('mousemove', {
+        clientX: cx + 50, clientY: cy + 30, bubbles: true, cancelable: true
+      }));
+      document.dispatchEvent(new MouseEvent('mouseup', {
+        clientX: cx + 50, clientY: cy + 30, bubbles: true, cancelable: true
+      }));
+
+      const after = { x: c._zoomPan.translateX, y: c._zoomPan.translateY };
+      return { before, after };
+    });
+
+    const dx = result.after.x - result.before.x;
+    const dy = result.after.y - result.before.y;
+    expect(Math.abs(dx) + Math.abs(dy)).toBeGreaterThan(0);
+  });
+
+  test('double-click resets zoom and pan', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    const result = await page.evaluate(() => {
+      const c = document.querySelector('.mermaid-container');
+      const viewport = c.querySelector('.mermaid-viewport');
+      const rect = viewport.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      // Zoom in first
+      for (let i = 0; i < 10; i++) {
+        viewport.dispatchEvent(new WheelEvent('wheel', {
+          deltaY: -100, clientX: cx, clientY: cy, bubbles: true, cancelable: true
+        }));
+      }
+      const zoomedScale = c._zoomPan.scale;
+
+      // Double-click to reset
+      viewport.dispatchEvent(new MouseEvent('dblclick', {
+        clientX: cx, clientY: cy, bubbles: true, cancelable: true
+      }));
+
+      return { zoomedScale, resetScale: c._zoomPan.scale };
+    });
+
+    expect(result.resetScale).toBeLessThan(result.zoomedScale);
+  });
+
+  test('short click selects the mermaid block', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    // Simulate a short click (mousedown + immediate mouseup with no movement)
+    await page.evaluate(() => {
+      const c = document.querySelector('.mermaid-container');
+      const viewport = c.querySelector('.mermaid-viewport');
+      const rect = viewport.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      viewport.dispatchEvent(new MouseEvent('mousedown', {
+        clientX: cx, clientY: cy, bubbles: true, cancelable: true
+      }));
+      document.dispatchEvent(new MouseEvent('mouseup', {
+        clientX: cx, clientY: cy, bubbles: true, cancelable: true
+      }));
+    });
+
+    await expect(page.locator('#preview .mermaid-container.selected')).toHaveCount(1);
+  });
+});
+
+test.describe('Feature 10e: Edit Cycle Integration', () => {
+
+  test('Enter on mermaid block opens textarea with mermaid source', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    await selectMermaidBlock(page);
+    await pressKey(page, 'Enter');
+
+    // Should have a textarea (mermaid uses its own edit mode, not CodeMirror)
+    // or a CM editor — check for either
+    const hasTextarea = await page.evaluate(() => {
+      const ta = document.querySelector('#preview textarea');
+      return ta !== null;
+    });
+    const hasCM = await page.evaluate(() => {
+      const cm = document.querySelector('#preview .cm-wrapper');
+      return cm !== null;
+    });
+    expect(hasTextarea || hasCM).toBe(true);
+
+    // The editor content should contain the mermaid fence
+    const content = hasTextarea
+      ? await page.locator('#preview textarea').inputValue()
+      : await getEditorText(page);
+    expect(content).toContain('```mermaid');
+    expect(content).toContain('graph TD');
+  });
+
+  test('Escape from edit button textarea re-renders mermaid diagram', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    // Use the edit button (✎) which creates a plain textarea with Escape→render
+    const editBtn = page.locator('.mermaid-btn-bar .mermaid-btn').first();
+    await editBtn.click();
+
+    // Wait for the textarea to appear
+    await page.waitForSelector('#preview textarea', { timeout: 5000 });
+
+    // Press Escape — the textarea keydown handler renders and calls processMermaidBlocks
+    await page.keyboard.press('Escape');
+
+    // Wait for mermaid async re-render
+    await page.waitForSelector('#preview .mermaid-container', { timeout: 15000 });
+
+    const container = page.locator('#preview .mermaid-container');
+    await expect(container).toHaveCount(1);
+    await expect(container.locator('svg')).toHaveCount(1);
+  });
+
+  test('Shift+Enter re-renders mermaid diagram', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    await selectMermaidBlock(page);
+    await pressKey(page, 'Enter');
+
+    await waitForEditMode(page);
+
+    // Press Shift+Enter to render
+    await page.keyboard.press('Shift+Enter');
+
+    await page.waitForSelector('#preview .mermaid-container', { timeout: 15000 });
+
+    const container = page.locator('#preview .mermaid-container');
+    await expect(container).toHaveCount(1);
+    await expect(container.locator('svg')).toHaveCount(1);
+  });
+
+  test('editing mermaid source and re-rendering updates the diagram', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    // Store original source
+    const originalSource = await page.locator('#preview .mermaid-container').getAttribute('data-mermaid-source');
+
+    await selectMermaidBlock(page);
+    await pressKey(page, 'Enter');
+
+    await page.waitForTimeout(300);
+
+    // Modify the source — add a new node
+    const isTextarea = await page.evaluate(() => !!document.querySelector('#preview textarea'));
+    if (isTextarea) {
+      const textarea = page.locator('#preview textarea');
+      const value = await textarea.inputValue();
+      const modified = value.replace('D --> E', 'D --> E\n    E --> F[New Node]');
+      await textarea.fill(modified);
+    } else {
+      const text = await getEditorText(page);
+      const modified = text.replace('D --> E', 'D --> E\n    E --> F[New Node]');
+      await typeInEditor(page, modified);
+    }
+
+    // Render
+    await page.keyboard.press('Shift+Enter');
+    await waitForMermaid(page);
+
+    // The new source should include the added node
+    const newSource = await page.locator('#preview .mermaid-container').getAttribute('data-mermaid-source');
+    expect(newSource).toContain('F[New Node]');
+  });
+
+  test('edit button opens mermaid edit mode', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    // Click the edit button on the mermaid container
+    const editBtn = page.locator('.mermaid-btn-bar .mermaid-btn').first();
+    await editBtn.click();
+
+    await page.waitForTimeout(300);
+
+    // Should now have an editor with the mermaid source
+    const hasEditor = await page.evaluate(() => {
+      const ta = document.querySelector('#preview textarea');
+      const cm = document.querySelector('#preview .cm-wrapper');
+      return ta !== null || cm !== null;
+    });
+    expect(hasEditor).toBe(true);
+  });
+
+  test('undo restores mermaid block after edit cycle', async ({ page }) => {
+    await waitForEditor(page);
+    await waitForMermaid(page);
+
+    // Verify mermaid container exists initially
+    await expect(page.locator('#preview .mermaid-container')).toHaveCount(1);
+
+    await selectMermaidBlock(page);
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    // Render via Shift+Enter (Escape only blurs in CM, doesn't render)
+    await page.keyboard.press('Shift+Enter');
+    await page.waitForSelector('#preview .mermaid-container', { timeout: 15000 });
+
+    // Undo the render (restores the CM editor state)
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(500);
+
+    // Undo again (restores the original mermaid container before entering edit mode)
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(500);
+
+    // The undo restores innerHTML which contains the mermaid-container markup
+    // Verify the mermaid container is present (innerHTML snapshot includes the rendered container)
+    await expect(page.locator('#preview .mermaid-container')).toHaveCount(1);
+    await expect(page.locator('#preview .mermaid-container svg')).toHaveCount(1);
+  });
+});
+
