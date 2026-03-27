@@ -5,15 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mermaid Test — Small Graph</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     <script src="https://unpkg.com/turndown/dist/turndown.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-    <script src="test-small.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- CodeMirror 6 bundle (pre-built IIFE, sets window.CM) -->
+    <script src="codemirrorBundle.js"></script>
     <script src="undo.js"></script>
     <script src="mermaid.js"></script>
     <script src="events.js"></script>
     <script src="rubberband.js"></script>
+    <!-- Test content: overrides markdownText before base.js loads -->
+    <script src="test-small.js"></script>
+    <script src="base.js"></script>
 </head>
 <body>
     <div class="container">

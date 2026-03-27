@@ -52,6 +52,8 @@ editor/              — Main editor application
   rubberband.js      — Lasso/rubber-band drag selection over blocks
   styles.css         — All styling: layout, block selection (#e1f0ff),
                        pointer-events for compound blocks, CM wrapper styles
+  test-{small,large}.html — Example pages (same script stack as editor.html)
+  test-{small,large}.js   — Only override markdownText with test content
 tests/
   editor.spec.js     — Playwright E2E tests (all features)
 playwright.config.js — Playwright config (chromium, port 3999)
@@ -85,3 +87,4 @@ plan.md              — Feature plan and implementation roadmap
 - **Every new feature must be documented in `plan.md`** before implementation begins, following the existing format (problem, goal, implementation details, edge cases, affected files).
 - **Every feature must have Playwright test coverage** in `tests/editor.spec.js`. Tests should be written as part of the feature implementation, not as a separate step.
 - **Commit work at sensible intervals** — check in progress to git regularly (e.g. after each logical unit of work) so that reverting is easy if something goes wrong. Don't batch up large changes into a single commit.
+- **Example/test pages must use `base.js`** — all example and test HTML pages (e.g. `test-small.html`, `test-large.html`) must include the same script stack as `editor.html` (CDN libs, `codemirrorBundle.js`, `undo.js`, `mermaid.js`, `events.js`, `rubberband.js`, `base.js`). The only thing a test page's JS file may do is override `markdownText` with custom content. **Never duplicate logic from `base.js` or other shared files into example-specific scripts.** All behavior modifications must happen in the shared codebase so that examples automatically stay in sync.

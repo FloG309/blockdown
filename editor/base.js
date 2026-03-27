@@ -8,7 +8,8 @@ var EditorState = {
     redoStack: []
 };
 
-let markdownText = `
+// Allow example/test pages to set markdownText before base.js loads
+if (typeof markdownText === 'undefined') var markdownText = `
 ## Welcome to the Markdown Editor
 
 This is a *lightweight* editor that renders **Markdown** on demand.
