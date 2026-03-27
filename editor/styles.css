@@ -499,5 +499,5 @@ textarea:focus {
 }
 
 .cm-md-blank-line {
-  margin-bottom: 0.8em;
+  padding-bottom: 0.8em;
 }

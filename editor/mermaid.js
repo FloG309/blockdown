@@ -37,6 +37,14 @@ async function processMermaidBlocks(container) {
     }
 
     setupSelectionHandlers();
+
+    // Restore currentSelectedIndex from the element that still has .selected,
+    // since setupSelectionHandlers() resets it to -1.
+    const selected = container.querySelector('.selected');
+    if (selected) {
+        const idx = parseInt(selected.getAttribute('data-index'));
+        if (!isNaN(idx)) currentSelectedIndex = idx;
+    }
 }
 
 function createMermaidContainer(svgString, source) {
@@ -327,8 +335,8 @@ function setupResize(container) {
 
             const startX = e.clientX;
             const startY = e.clientY;
-            const startWidth = container.offsetWidth;
-            const startHeight = container.offsetHeight;
+            const startWidth = container.clientWidth;
+            const startHeight = container.clientHeight;
 
             const pos = handle.className.match(/mermaid-handle-(\w+)/)[1];
             const state = container._zoomPan;
@@ -356,8 +364,8 @@ function setupResize(container) {
                     h = startHeight - dy;
                 }
 
-                const oldW = container.offsetWidth;
-                const oldH = container.offsetHeight;
+                const oldW = container.clientWidth;
+                const oldH = container.clientHeight;
 
                 const newW = Math.max(minSize, w);
                 const newH = Math.max(minSize, h);
@@ -365,7 +373,12 @@ function setupResize(container) {
                 container.style.width = newW + 'px';
                 container.style.height = newH + 'px';
 
-                // Shift diagram so it travels with the dragged edge
+                // Shift diagram so it travels smoothly with the dragged edge.
+                // Three phases per axis:
+                //   1. Diagram fits inside viewport → no shift, viewport just shrinks
+                //   2. Dragged edge meets diagram edge → diagram slides, preserving
+                //      the visible portion, until the opposite edge hits
+                //   3. Opposite edge hits → diagram stops, clipping grows on dragged side
                 const dw = newW - oldW;
                 const dh = newH - oldH;
 
@@ -373,27 +386,55 @@ function setupResize(container) {
                 const scaledW = nat.w * state.scale;
                 const scaledH = nat.h * state.scale;
 
-                // Left-side handles: shift diagram with the edge
+                // --- X axis ---
                 if (pos === 'bl' || pos === 'tl') {
-                    state.translateX += dw;
+                    // Left edge dragged: shift to keep diagram stationary on screen.
+                    // When expanding (dw > 0), always shift (reveals more diagram).
+                    // When shrinking (dw < 0), shift until translateX hits 0, then stop
+                    // so existing left overflow isn't increased.
+                    if (dw >= 0) {
+                        state.translateX += dw;
+                    } else if (state.translateX + dw >= 0) {
+                        state.translateX += dw;
+                    } else if (state.translateX > 0) {
+                        state.translateX = 0;
+                    }
                 }
-                // Top handles: shift diagram with the top edge
-                if (pos === 'tl' || pos === 'tr') {
-                    state.translateY += dh;
+                if (pos === 'br' || pos === 'tr') {
+                    // Right edge dragged: slide diagram only when right overflows
+                    // AND there's room on the left (translateX > 0).
+                    // If left already overflows, don't slide — just clip right more.
+                    if (dw < 0) {
+                        const diagramRight = state.translateX + scaledW;
+                        if (diagramRight > oldW && state.translateX > 0) {
+                            state.translateX = Math.max(0, state.translateX + dw);
+                        } else if (diagramRight > newW && state.translateX > 0) {
+                            state.translateX = Math.max(0, newW - scaledW);
+                        }
+                    }
                 }
 
-                // Tight resize clamp: edges stay within viewport (so the diagram
-                // travels with the boundary but stops when the opposite edge hits
-                // the opposite viewport). Don't snap if already outside bounds.
-                if (scaledW <= newW) {
-                    state.translateX = Math.max(0, Math.min(newW - scaledW, state.translateX));
-                } else {
-                    state.translateX = Math.max(newW - scaledW, Math.min(0, state.translateX));
+                // --- Y axis ---
+                if (pos === 'tl' || pos === 'tr') {
+                    // Top edge dragged: same logic as left edge for Y axis
+                    if (dh >= 0) {
+                        state.translateY += dh;
+                    } else if (state.translateY + dh >= 0) {
+                        state.translateY += dh;
+                    } else if (state.translateY > 0) {
+                        state.translateY = 0;
+                    }
                 }
-                if (scaledH <= newH) {
-                    state.translateY = Math.max(0, Math.min(newH - scaledH, state.translateY));
-                } else {
-                    state.translateY = Math.max(newH - scaledH, Math.min(0, state.translateY));
+                if (pos === 'br' || pos === 'bl') {
+                    // Bottom edge dragged: same logic as right edge for Y axis
+                    if (dh < 0) {
+                        const diagramBottom = state.translateY + scaledH;
+                        if (diagramBottom > oldH && state.translateY > 0) {
+                            state.translateY = Math.max(0, state.translateY + dh);
+                        } else if (diagramBottom > newH && state.translateY > 0) {
+                            state.translateY = Math.max(0, newH - scaledH);
+                        }
+                    }
                 }
 
                 applyTransform(content, state);
