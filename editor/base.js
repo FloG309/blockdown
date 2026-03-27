@@ -2,7 +2,9 @@ var selectableElements = [];
 var currentSelectedIndex = -1;
 var turndownService = new TurndownService();
 
-let markdownText = `
+// Allow other pages to pre-define markdownText (e.g. test pages with custom content)
+if (typeof markdownText === 'undefined') {
+var markdownText = `
 ## Welcome to the Markdown Editor
 
 This is a *lightweight* editor that renders **Markdown** on demand.
@@ -31,6 +33,7 @@ graph TD
 
 > Press Ctrl+Enter to see the rendered markdown.
 `
+}
 
 turndownService.addRule('fencedCodeBlock', {
     filter: function (node, options) {
