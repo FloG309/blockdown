@@ -1,6 +1,11 @@
-var selectableElements = [];
-var currentSelectedIndex = -1;
-var turndownService = new TurndownService();
+var EditorState = {
+    selectableElements: [],
+    currentSelectedIndex: -1,
+    turndownService: new TurndownService(),
+    blockClipboard: [],
+    undoStack: [],
+    redoStack: []
+};
 
 let markdownText = `
 ## Complex Mermaid Graph Test
@@ -377,7 +382,7 @@ stateDiagram-v2
 > This page tests large, complex mermaid diagrams with subgraphs, many nodes, and multiple diagram types.
 `;
 
-turndownService.addRule('fencedCodeBlock', {
+EditorState.turndownService.addRule('fencedCodeBlock', {
     filter: function (node, options) {
         return (
         options.codeBlockStyle === 'fenced' &&
@@ -398,10 +403,10 @@ turndownService.addRule('fencedCodeBlock', {
     }
 });
 
-turndownService.options.codeBlockStyle = 'fenced';
-turndownService.options.bulletListMarker = '-';
+EditorState.turndownService.options.codeBlockStyle = 'fenced';
+EditorState.turndownService.options.bulletListMarker = '-';
 
-turndownService.addRule('mermaidContainer', {
+EditorState.turndownService.addRule('mermaidContainer', {
     filter: function (node) {
         return node.nodeName === 'DIV' && node.classList.contains('mermaid-container');
     },
@@ -445,7 +450,7 @@ document.addEventListener('DOMContentLoaded', function() {
             lastKey = null;
         }
 
-        const selectedElement = selectableElements[currentSelectedIndex]
+        const selectedElement = EditorState.selectableElements[EditorState.currentSelectedIndex]
         if (selectedElement && selectedElement.tagName === 'TEXTAREA') {
             if (e.key === 'Enter') {
                 e.preventDefault();
