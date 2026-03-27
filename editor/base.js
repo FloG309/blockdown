@@ -132,13 +132,22 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Ctrl+Enter: render all blurred editors in the selection
+        // Ctrl+Enter: render all editors (selected + currently focused)
         if (e.ctrlKey && e.key === 'Enter') {
             const selected = Array.from(document.querySelectorAll('.selected'));
             const editors = selected.filter(el =>
                 el.tagName === 'TEXTAREA' ||
                 (el.classList && el.classList.contains('cm-wrapper'))
             );
+            // Also include the currently focused textarea/CM editor
+            const focused = document.activeElement;
+            if (focused && focused.tagName === 'TEXTAREA' && !editors.includes(focused)) {
+                editors.push(focused);
+            }
+            const cmWrapper = focused && focused.closest && focused.closest('.cm-wrapper');
+            if (cmWrapper && !editors.includes(cmWrapper)) {
+                editors.push(cmWrapper);
+            }
             if (editors.length > 0) {
                 e.preventDefault();
                 pushUndo();

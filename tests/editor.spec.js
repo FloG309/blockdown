@@ -1651,7 +1651,7 @@ test.describe('Feature 10e: Edit Cycle Integration', () => {
 
 test.describe('Test pages: basic smoke tests', () => {
 
-  test('test-small.html loads and supports block selection', async ({ page }) => {
+  test('test-small.html loads and supports block selection and edit cycle', async ({ page }) => {
     await page.goto('/editor/test-small.html');
     // Wait for mermaid diagrams to render
     await page.waitForSelector('#preview .mermaid-container', { timeout: 15000 });
@@ -1659,9 +1659,14 @@ test.describe('Test pages: basic smoke tests', () => {
     await page.keyboard.press('ArrowDown');
     const selected = page.locator('#preview .selected');
     await expect(selected).toHaveCount(1);
-    // Verify Enter opens edit mode (textarea, since no CodeMirror in test pages)
+    // Enter edit mode (textarea, since no CodeMirror in test pages)
     await page.keyboard.press('Enter');
     await page.waitForSelector('#preview textarea', { timeout: 5000 });
+    // Ctrl+Enter should render back from edit mode without errors
+    await page.keyboard.press('Control+Enter');
+    await page.waitForTimeout(500);
+    // Textarea should be gone — rendered back to block
+    await expect(page.locator('#preview textarea')).toHaveCount(0);
   });
 
   test('test-large.html loads and supports block selection', async ({ page }) => {

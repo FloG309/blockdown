@@ -435,6 +435,37 @@ document.addEventListener('DOMContentLoaded', function() {
         const isTextarea = e.target.tagName === 'TEXTAREA';
         const isInput = e.target.tagName === 'INPUT' || e.target.isContentEditable;
 
+        // Ctrl+Enter: render all editors (selected + currently focused)
+        if (e.ctrlKey && e.key === 'Enter') {
+            const selected = Array.from(document.querySelectorAll('.selected'));
+            const editors = selected.filter(el =>
+                el.tagName === 'TEXTAREA' ||
+                (el.classList && el.classList.contains('cm-wrapper'))
+            );
+            // Also include the currently focused textarea/CM editor
+            const focused = document.activeElement;
+            if (focused && focused.tagName === 'TEXTAREA' && !editors.includes(focused)) {
+                editors.push(focused);
+            }
+            const cmWrapper = focused && focused.closest && focused.closest('.cm-wrapper');
+            if (cmWrapper && !editors.includes(cmWrapper)) {
+                editors.push(cmWrapper);
+            }
+            if (editors.length > 0) {
+                e.preventDefault();
+                pushUndo();
+                for (let i = editors.length - 1; i >= 0; i--) {
+                    const el = editors[i];
+                    if (el.classList.contains('cm-wrapper') && el._cmView) {
+                        el.setAttribute('data-markdown-text', el._cmView.state.doc.toString());
+                    }
+                    renderMarkdownPartial(el);
+                }
+                setupSelectionHandlers();
+                return;
+            }
+        }
+
         if (isTextarea || isInput) return;
 
         if (e.key === 'd') {

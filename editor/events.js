@@ -77,6 +77,7 @@ function pasteBlocks() {
 
 // Apply syntax highlighting to all code blocks within a container or node list
 function highlightCodeBlocks(container) {
+    if (typeof hljs === 'undefined') return;
     const codeBlocks = container.querySelectorAll
         ? container.querySelectorAll('pre code')
         : [];
@@ -87,6 +88,7 @@ function highlightCodeBlocks(container) {
 
 // Highlight code blocks within a list of inserted nodes
 function highlightInsertedNodes(nodes) {
+    if (typeof hljs === 'undefined') return;
     nodes.forEach(node => {
         if (node.nodeType === Node.ELEMENT_NODE) {
             if (node.tagName === 'PRE') {
