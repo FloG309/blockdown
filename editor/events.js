@@ -2,6 +2,26 @@
 // ~~~~~~~~~~~~~~~~~~Helper Functions~~~~~~~~~~~~~~~~~~~~~~~
 //----------------------------------------------------------
 
+/**
+ * Scroll the #preview container so the CM cursor is visible.
+ * Uses setTimeout to wait for CM to fully render the cursor after focus.
+ */
+function scrollCMCursorIntoView(view) {
+    setTimeout(() => {
+        const preview = document.getElementById('preview');
+        if (!preview) return;
+        const coords = view.coordsAtPos(view.state.selection.main.head);
+        if (!coords) return;
+        const previewRect = preview.getBoundingClientRect();
+        const cursorInPreview = coords.top - previewRect.top;
+        // Only scroll if the cursor is outside the visible area
+        if (cursorInPreview < 0 || cursorInPreview > preview.clientHeight) {
+            const targetScrollTop = preview.scrollTop + cursorInPreview - preview.clientHeight / 2;
+            preview.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+        }
+    }, 50);
+}
+
 // Internal block clipboard (array of markdown strings)
 var blockClipboard = [];
 
@@ -490,8 +510,9 @@ function createEditElement(markdown, totalHeight, firstTag, parent, insertBefore
         const view = window.CM.createMarkdownEditor(wrapper, markdown, onExit);
         wrapper._cmView = view;
 
-        // Focus the editor
+        // Focus the editor and scroll the cursor into view
         view.focus();
+        scrollCMCursorIntoView(view);
 
         return wrapper;
     } else {

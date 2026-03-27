@@ -206,9 +206,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (selectedElement && selectedElement.classList && selectedElement.classList.contains('cm-wrapper')) {
             if (e.key === 'Enter' && !e.ctrlKey) {
                 e.preventDefault();
-                // Focus the CM editor inside
+                // Focus the CM editor inside and scroll to the cursor
                 if (selectedElement._cmView) {
-                    selectedElement._cmView.focus();
+                    const view = selectedElement._cmView;
+                    view.focus();
+                    scrollCMCursorIntoView(view);
                 }
                 selectedElement.classList.remove('selected');
                 return;

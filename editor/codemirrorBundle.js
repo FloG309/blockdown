@@ -7,7 +7,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
 
-  // node_modules/@marijn/find-cluster-break/src/index.js
+  // ../node_modules/@marijn/find-cluster-break/src/index.js
   function isExtendingChar(code) {
     if (code < 768) return false;
     for (let from = 0, to = rangeFrom.length; ; ) {
@@ -74,7 +74,7 @@
   }
   var rangeFrom, rangeTo, ZWJ;
   var init_src = __esm({
-    "node_modules/@marijn/find-cluster-break/src/index.js"() {
+    "../node_modules/@marijn/find-cluster-break/src/index.js"() {
       rangeFrom = [];
       rangeTo = [];
       (() => {
@@ -86,7 +86,7 @@
     }
   });
 
-  // node_modules/@codemirror/state/dist/index.js
+  // ../node_modules/@codemirror/state/dist/index.js
   function textLength(text) {
     let length = -1;
     for (let line of text)
@@ -701,7 +701,7 @@
   }
   var Text, TextLeaf, TextNode, RawTextCursor, PartialTextCursor, LineCursor, Line, DefaultSplit, MapMode, ChangeDesc, ChangeSet, SectionIter, SelectionRange, EditorSelection, nextID, Facet, FacetProvider, initField, StateField, Prec_, Prec, PrecExtension, Compartment, CompartmentInstance, Configuration, languageData, allowMultipleSelections, lineSeparator, changeFilter, transactionFilter, transactionExtender, readOnly, Annotation, AnnotationType, StateEffectType, StateEffect, Transaction, none, CharCategory, nonASCIISingleCaseWordChar, wordChar, EditorState, RangeValue, Range, Chunk, RangeSet, RangeSetBuilder, LayerCursor, HeapCursor, SpanCursor;
   var init_dist = __esm({
-    "node_modules/@codemirror/state/dist/index.js"() {
+    "../node_modules/@codemirror/state/dist/index.js"() {
       init_src();
       Text = class _Text {
         /**
@@ -3438,10 +3438,10 @@
     }
   });
 
-  // node_modules/style-mod/src/style-mod.js
+  // ../node_modules/style-mod/src/style-mod.js
   var C, COUNT, SET, top, StyleModule, adoptedSet, StyleSet;
   var init_style_mod = __esm({
-    "node_modules/style-mod/src/style-mod.js"() {
+    "../node_modules/style-mod/src/style-mod.js"() {
       C = "\u037C";
       COUNT = typeof Symbol == "undefined" ? "__" + C : Symbol.for(C);
       SET = typeof Symbol == "undefined" ? "__styleSet" + Math.floor(Math.random() * 1e8) : /* @__PURE__ */ Symbol("styleSet");
@@ -3574,7 +3574,7 @@
     }
   });
 
-  // node_modules/w3c-keyname/index.js
+  // ../node_modules/w3c-keyname/index.js
   function keyName(event) {
     var ignoreKey = mac && event.metaKey && event.shiftKey && !event.ctrlKey && !event.altKey || ie && event.shiftKey && event.key && event.key.length == 1 || event.key == "Unidentified";
     var name2 = !ignoreKey && event.key || (event.shiftKey ? shift : base)[event.keyCode] || event.key || "Unidentified";
@@ -3588,7 +3588,7 @@
   }
   var base, shift, mac, ie, i, i, i, code;
   var init_w3c_keyname = __esm({
-    "node_modules/w3c-keyname/index.js"() {
+    "../node_modules/w3c-keyname/index.js"() {
       base = {
         8: "Backspace",
         9: "Tab",
@@ -3681,13 +3681,13 @@
     }
   });
 
-  // node_modules/crelt/index.js
+  // ../node_modules/crelt/index.js
   var init_crelt = __esm({
-    "node_modules/crelt/index.js"() {
+    "../node_modules/crelt/index.js"() {
     }
   });
 
-  // node_modules/@codemirror/view/dist/index.js
+  // ../node_modules/@codemirror/view/dist/index.js
   function combineAttrs(source, target) {
     for (let name2 in source) {
       if (name2 == "class" && target.class)
@@ -5695,7 +5695,7 @@
   }
   var nav, doc, ie_edge, ie_upto10, ie_11up, ie2, gecko, chrome, webkit, safari, ios, browser, noAttrs, WidgetType, BlockType, Decoration, MarkDecoration, LineDecoration, PointDecoration, BlockWrapper, DOMSelectionState, preventScrollSupported, scratchRange, DOMPos, Direction, LTR, RTL, LowTypes, ArabicTypes, Brackets, BracketStack, BidiRE, BidiSpan, types, movedOver, clickAddsSelectionRange, dragMovesSelection$1, mouseSelectionStyle, exceptionSink, updateListener, inputHandler, focusChangeEffect, clipboardInputFilter, clipboardOutputFilter, perLineTextDirection, nativeSelectionHidden, scrollHandler, ScrollTarget, scrollIntoView, setEditContextFormatting, editable, nextPluginID, viewPlugin, ViewPlugin, PluginInstance, editorAttributes, contentAttributes, decorations, blockWrappers, outerDecorations, atomicRanges, bidiIsolatedRanges, scrollMargins, styleModule, ChangedRange, ViewUpdate, noChildren, Tile, CompositeTile, DocTile, BlockWrapperTile, LineTile, MarkTile, TextTile, WidgetTile, WidgetBufferTile, TilePointer, OpenWrapper, TileBuilder, TextStream, buckets, TileCache, TileUpdate, lineBaseAttrs, NullWidget, BreakWidget, DocView, DecorationComparator$1, WrapperComparator, BlockGapWidget, PosAssoc, InlineCoordsScan, LineBreakPlaceholder, DOMReader, DOMPoint, DOMChange, InputState, PendingKeys, EmacsyPendingKeys, modifierCodes, dragScrollMargin, MouseSelection, handlers, observers, brokenClipboardAPI, BadMouseDetail, lastMouseDown, lastMouseDownCount, lastMouseDownTime, lastLinewiseCopy, isFocusChange, appliedFirefoxHack, wrappingWhiteSpace, heightChangeFlag, HeightOracle, MeasuredHeights, BlockInfo, QueryType, Epsilon, HeightMap, SpaceDeco, HeightMapBlock, HeightMapText, HeightMapGap, HeightMapBranch, relevantWidgetHeight, NodeBuilder, DecorationComparator2, LineGap, LineGapWidget, ViewState, Viewport, IdScaler, BigScaler, theme, darkTheme, baseThemeID, baseLightID, baseDarkID, lightDarkIDs, baseTheme$1, observeOptions, useCharData, DOMObserver, EditContextManager, EditorView, MaxBidiLine, BadMeasure, CachedOrder, currentPlatform, handleKeyEvents, keymap, Keymaps, storedPrefix, PrefixTimeout, currentKeyEvent, UnicodeRegexpSupport, baseTheme, GutterMarker;
   var init_dist2 = __esm({
-    "node_modules/@codemirror/view/dist/index.js"() {
+    "../node_modules/@codemirror/view/dist/index.js"() {
       init_dist();
       init_style_mod();
       init_w3c_keyname();
@@ -12070,7 +12070,7 @@
     }
   });
 
-  // node_modules/@lezer/common/dist/index.js
+  // ../node_modules/@lezer/common/dist/index.js
   function checkSide(side, pos, from, to) {
     switch (side) {
       case -2:
@@ -12564,7 +12564,7 @@
   }
   var DefaultBufferLength, nextPropID, Range2, NodeProp, MountedTree, noProps, NodeType, NodeSet, CachedNode, CachedInnerNode, IterMode, Tree, FlatBufferCursor, TreeBuffer, BaseNode, TreeNode, BufferContext, BufferNode, StackIterator, TreeCursor, nodeSizeCache, NodeWeakMap, TreeFragment, Parser, StringInput, InnerParse, ActiveOverlay, stoppedInner, MixedParse, StructureCursor, FragmentCursor;
   var init_dist3 = __esm({
-    "node_modules/@lezer/common/dist/index.js"() {
+    "../node_modules/@lezer/common/dist/index.js"() {
       DefaultBufferLength = 1024;
       nextPropID = 0;
       Range2 = class {
@@ -14121,7 +14121,7 @@
     }
   });
 
-  // node_modules/@lezer/highlight/dist/index.js
+  // ../node_modules/@lezer/highlight/dist/index.js
   function sameArray2(a, b) {
     return a.length == b.length && a.every((x, i) => x == b[i]);
   }
@@ -14222,7 +14222,7 @@
   }
   var nextTagID, Tag, nextModifierID, Modifier, ruleNodeProp, Rule, HighlightBuilder, t, comment, name, typeName, propertyName, literal, string, number, content, heading, keyword, operator, punctuation, bracket, meta, tags, classHighlighter;
   var init_dist4 = __esm({
-    "node_modules/@lezer/highlight/dist/index.js"() {
+    "../node_modules/@lezer/highlight/dist/index.js"() {
       init_dist3();
       nextTagID = 0;
       Tag = class _Tag {
@@ -14851,7 +14851,7 @@
     }
   });
 
-  // node_modules/@codemirror/language/dist/index.js
+  // ../node_modules/@codemirror/language/dist/index.js
   function defineLanguageFacet(baseData) {
     return Facet.define({
       combine: baseData ? (values2) => values2.concat(baseData) : void 0
@@ -15062,8 +15062,6 @@
     return { start: firstToken, matched: false };
   }
   function matchPlainBrackets(state, pos, dir, tree, tokenType, maxScanDistance, brackets) {
-    if (dir < 0 ? !pos : pos == state.doc.length)
-      return null;
     let startCh = dir < 0 ? state.sliceDoc(pos - 1, pos) : state.sliceDoc(pos, pos + 1);
     let bracket2 = brackets.indexOf(startCh);
     if (bracket2 < 0 || bracket2 % 2 == 0 != dir > 0)
@@ -15137,7 +15135,7 @@
   }
   var _a, languageDataProp, sublanguageProp, Language, LRLanguage, DocInput, currentContext, ParseContext, LanguageState, requestIdle, isInputPending, parseWorker, language, LanguageSupport, LanguageDescription, indentService, indentUnit, IndentContext, indentNodeProp, TreeIndentContext, flatIndent, foldService, foldNodeProp, HighlightStyle, highlighterFacet, fallbackHighlighter, TreeHighlighter, treeHighlighter, defaultHighlightStyle, DefaultScanDist, DefaultBrackets, bracketMatchingHandle, noTokens, typeArray, warned, byTag, defaultTable, marks;
   var init_dist5 = __esm({
-    "node_modules/@codemirror/language/dist/index.js"() {
+    "../node_modules/@codemirror/language/dist/index.js"() {
       init_dist3();
       init_dist();
       init_dist2();
@@ -16074,7 +16072,7 @@
     }
   });
 
-  // node_modules/@codemirror/autocomplete/dist/index.js
+  // ../node_modules/@codemirror/autocomplete/dist/index.js
   function toSet(chars) {
     let flat = Object.keys(chars).join("");
     let words = /\w/.test(flat);
@@ -16162,7 +16160,7 @@
   }
   var CompletionContext, pickedCompletion, windows, baseTheme2, FieldPos, FieldRange, Snippet, fieldMarker, fieldRange, ActiveSnippet, setActive, moveToField, snippetState, clearSnippet, nextSnippetField, prevSnippetField, defaultSnippetKeymap, snippetKeymap, addSnippetKeymap, snippetPointerHandler, closedBracket, android;
   var init_dist6 = __esm({
-    "node_modules/@codemirror/autocomplete/dist/index.js"() {
+    "../node_modules/@codemirror/autocomplete/dist/index.js"() {
       init_dist();
       init_dist2();
       init_dist5();
@@ -16544,7 +16542,7 @@
     }
   });
 
-  // node_modules/@lezer/markdown/dist/index.js
+  // ../node_modules/@lezer/markdown/dist/index.js
   function skipForList(bl, cx, line) {
     if (line.pos == line.text.length || bl != cx.block && line.indent >= cx.stack[line.depth + 1].value + line.baseIndent)
       return true;
@@ -16991,7 +16989,7 @@
   }
   var CompositeBlock, Type, LeafBlock, Line2, DefaultSkipMarkup, EmptyLine, CommentEnd, ProcessingEnd, HTMLBlockStyle, DefaultBlockParsers, LinkReferenceParser, SetextHeadingParser, DefaultLeafBlocks, DefaultEndLeaf, scanLineResult, BlockContext, MarkdownParser, nodeTypes, none2, Buffer2, Element, TreeElement, EmphasisUnderscore, EmphasisAsterisk, LinkStart, ImageStart, InlineDelimiter, Escapable, Punctuation, DefaultInline, InlineContext, NotLast, FragmentCursor2, markdownHighlighting, parser, StrikethroughDelim, Strikethrough, delimiterLine, TableParser, Table, TaskParser, TaskList, autolinkRE, urlRE, lastTwoDomainWords, emailRE, xmppResourceRE, Autolink, GFM, Superscript, Subscript, Emoji;
   var init_dist7 = __esm({
-    "node_modules/@lezer/markdown/dist/index.js"() {
+    "../node_modules/@lezer/markdown/dist/index.js"() {
       init_dist3();
       init_dist4();
       CompositeBlock = class _CompositeBlock {
@@ -18611,7 +18609,7 @@
     }
   });
 
-  // node_modules/@lezer/lr/dist/index.js
+  // ../node_modules/@lezer/lr/dist/index.js
   function decodeArray(input, Type2 = Uint16Array) {
     if (typeof input != "string")
       return input;
@@ -18750,7 +18748,7 @@
   }
   var Stack, StackContext, SimulatedStack, StackBufferCursor, CachedToken, nullToken, InputStream, TokenGroup, LocalTokenGroup, ExternalTokenizer, verbose, stackIDs, FragmentCursor3, TokenCache, Parse, Dialect, id, ContextTracker, LRParser;
   var init_dist8 = __esm({
-    "node_modules/@lezer/lr/dist/index.js"() {
+    "../node_modules/@lezer/lr/dist/index.js"() {
       init_dist3();
       Stack = class _Stack {
         /**
@@ -20376,7 +20374,7 @@
     }
   });
 
-  // node_modules/@lezer/html/dist/index.js
+  // ../node_modules/@lezer/html/dist/index.js
   function nameChar(ch) {
     return ch == 45 || ch == 46 || ch == 58 || ch >= 65 && ch <= 90 || ch == 95 || ch >= 97 && ch <= 122 || ch >= 161;
   }
@@ -20495,7 +20493,7 @@
   }
   var scriptText, StartCloseScriptTag, styleText, StartCloseStyleTag, textareaText, StartCloseTextareaTag, EndTag, SelfClosingEndTag, StartTag, StartScriptTag, StartStyleTag, StartTextareaTag, StartSelfClosingTag, StartCloseTag, NoMatchStartCloseTag, MismatchedStartCloseTag, missingCloseTag, IncompleteTag, IncompleteCloseTag, commentContent$1, Element2, TagName, Attribute, AttributeName, AttributeValue, UnquotedAttributeValue, ScriptText, StyleText, TextareaText, OpenTag, CloseTag, Dialect_noMatch, Dialect_selfClosing, selfClosers, implicitlyClosed, closeOnOpen, cachedName, cachedInput, cachedPos, lessThan, greaterThan, slash, question, bang, dash, startTagTerms, elementContext, tagStart, commentContent, endTag, scriptTokens, styleTokens, textareaTokens, htmlHighlighting, parser2;
   var init_dist9 = __esm({
-    "node_modules/@lezer/html/dist/index.js"() {
+    "../node_modules/@lezer/html/dist/index.js"() {
       init_dist8();
       init_dist4();
       init_dist3();
@@ -20728,7 +20726,7 @@
     }
   });
 
-  // node_modules/@lezer/css/dist/index.js
+  // ../node_modules/@lezer/css/dist/index.js
   function isAlpha(ch) {
     return ch >= 65 && ch <= 90 || ch >= 97 && ch <= 122 || ch >= 161;
   }
@@ -20740,7 +20738,7 @@
   }
   var descendantOp, Unit, identifier, callee, VariableName, queryIdentifier, queryVariableName, QueryCallee, space2, colon, parenL, underscore, bracketL, dash2, period, hash, percent, ampersand, backslash, newline, asterisk, identifierTokens, identifiers, queryIdentifiers, descendant, unitToken, cssHighlighting, spec_callee, spec_queryIdentifier, spec_QueryCallee, spec_AtKeyword, spec_identifier, parser3;
   var init_dist10 = __esm({
-    "node_modules/@lezer/css/dist/index.js"() {
+    "../node_modules/@lezer/css/dist/index.js"() {
       init_dist8();
       init_dist4();
       descendantOp = 135;
@@ -20910,7 +20908,7 @@
     }
   });
 
-  // node_modules/@codemirror/lang-css/dist/index.js
+  // ../node_modules/@codemirror/lang-css/dist/index.js
   function properties() {
     if (!_properties && typeof document == "object" && document.body) {
       let { style } = document.body, names = [], seen = /* @__PURE__ */ new Set();
@@ -20984,7 +20982,7 @@
   }
   var _properties, pseudoClasses, values, tags2, atRules, identifier2, variable, VariablesByNode, declSelector, defineCSSCompletionSource, cssCompletionSource, cssLanguage;
   var init_dist11 = __esm({
-    "node_modules/@codemirror/lang-css/dist/index.js"() {
+    "../node_modules/@codemirror/lang-css/dist/index.js"() {
       init_dist10();
       init_dist5();
       init_dist3();
@@ -21779,13 +21777,13 @@
     }
   });
 
-  // node_modules/@lezer/javascript/dist/index.js
+  // ../node_modules/@lezer/javascript/dist/index.js
   function identifierChar(ch, start) {
     return ch >= 65 && ch <= 90 || ch >= 97 && ch <= 122 || ch == 95 || ch >= 192 || !start && ch >= 48 && ch <= 57;
   }
   var noSemi, noSemiType, incdec, incdecPrefix, questionDot, JSXStartTag, insertSemi, spaces, newline2, LineComment, BlockComment, Dialect_jsx, space3, braceR, semicolon, slash2, star, plus, minus, lt, comma, question2, dot, bracketL2, trackNewline, insertSemicolon, noSemicolon, noSemicolonType, operatorToken, jsx, jsHighlight, spec_identifier2, spec_word, spec_LessThan, parser4;
   var init_dist12 = __esm({
-    "node_modules/@lezer/javascript/dist/index.js"() {
+    "../node_modules/@lezer/javascript/dist/index.js"() {
       init_dist8();
       init_dist4();
       noSemi = 316;
@@ -21998,7 +21996,7 @@
     }
   });
 
-  // node_modules/@codemirror/lang-javascript/dist/index.js
+  // ../node_modules/@codemirror/lang-javascript/dist/index.js
   function defID(type) {
     return (node, def) => {
       let id2 = node.node.getChild("VariableDefinition");
@@ -22081,7 +22079,7 @@
   }
   var snippets, typescriptSnippets, cache, ScopeNodes, functionContext, gatherCompletions, Identifier, dontComplete, javascriptLanguage, jsxSublanguage, typescriptLanguage, jsxLanguage, tsxLanguage, kwCompletion, keywords, typescriptKeywords, android2, autoCloseTags;
   var init_dist13 = __esm({
-    "node_modules/@codemirror/lang-javascript/dist/index.js"() {
+    "../node_modules/@codemirror/lang-javascript/dist/index.js"() {
       init_dist12();
       init_dist5();
       init_dist();
@@ -22321,7 +22319,7 @@
     }
   });
 
-  // node_modules/@codemirror/lang-html/dist/index.js
+  // ../node_modules/@codemirror/lang-html/dist/index.js
   function elementName2(doc2, tree, max = doc2.length) {
     if (!tree)
       return "";
@@ -22476,7 +22474,7 @@
   }
   var Targets, Charsets, Methods, Encs, Bool, S, Tags, GlobalAttrs, eventAttributes, Schema, identifier3, jsonParser, defaultNesting, defaultAttrs, htmlPlain, htmlLanguage, selfClosers2, autoCloseTags2;
   var init_dist14 = __esm({
-    "node_modules/@codemirror/lang-html/dist/index.js"() {
+    "../node_modules/@codemirror/lang-html/dist/index.js"() {
       init_dist9();
       init_dist11();
       init_dist13();
@@ -23061,7 +23059,7 @@
     }
   });
 
-  // node_modules/@codemirror/lang-markdown/dist/index.js
+  // ../node_modules/@codemirror/lang-markdown/dist/index.js
   function isHeading(type) {
     let match = /^(?:ATX|Setext)Heading(\d)$/.exec(type.name);
     return match ? +match[1] : void 0;
@@ -23257,7 +23255,7 @@
   }
   var data, headingProp, commonmark, headerIndent, commonmarkLanguage, extended, markdownLanguage, Context, insertNewlineContinueMarkupCommand, insertNewlineContinueMarkup, deleteMarkupBackward, markdownKeymap, htmlNoMatch, _tagCompletions, nonPlainText, pasteURLAsLink;
   var init_dist15 = __esm({
-    "node_modules/@codemirror/lang-markdown/dist/index.js"() {
+    "../node_modules/@codemirror/lang-markdown/dist/index.js"() {
       init_dist();
       init_dist2();
       init_dist5();
@@ -23492,7 +23490,7 @@
     }
   });
 
-  // node_modules/@codemirror/commands/dist/index.js
+  // ../node_modules/@codemirror/commands/dist/index.js
   function command(f, option) {
     return ({ state, dispatch }) => {
       if (state.readOnly)
@@ -24062,7 +24060,7 @@
   }
   var toggleComment, toggleLineComment, toggleBlockComment, toggleBlockCommentByLine, SearchMargin, fromHistory, isolateHistory, invertedEffects, historyConfig, historyField_, undo, redo, undoSelection, redoSelection, HistEvent, none3, MaxSelectionsPerEvent, joinableUserEvent, HistoryState, historyKeymap, cursorCharLeft, cursorCharRight, cursorGroupLeft, cursorGroupRight, segmenter, cursorSyntaxLeft, cursorSyntaxRight, cursorLineUp, cursorLineDown, cursorPageUp, cursorPageDown, cursorLineBoundaryForward, cursorLineBoundaryBackward, cursorLineBoundaryLeft, cursorLineBoundaryRight, cursorLineStart, cursorLineEnd, cursorMatchingBracket, selectCharLeft, selectCharRight, selectGroupLeft, selectGroupRight, selectSyntaxLeft, selectSyntaxRight, selectLineUp, selectLineDown, selectPageUp, selectPageDown, selectLineBoundaryForward, selectLineBoundaryBackward, selectLineBoundaryLeft, selectLineBoundaryRight, selectLineStart, selectLineEnd, cursorDocStart, cursorDocEnd, selectDocStart, selectDocEnd, selectAll, selectLine, selectParentSyntax, addCursorAbove, addCursorBelow, simplifySelection, deleteByChar, deleteCharBackward, deleteCharForward, deleteByGroup, deleteGroupBackward, deleteGroupForward, deleteToLineEnd, deleteLineBoundaryBackward, deleteLineBoundaryForward, splitLine, transposeChars, moveLineUp, moveLineDown, copyLineUp, copyLineDown, deleteLine, insertNewlineAndIndent, insertBlankLine, indentSelection, indentMore, indentLess, toggleTabFocusMode, emacsStyleKeymap, standardKeymap, defaultKeymap;
   var init_dist16 = __esm({
-    "node_modules/@codemirror/commands/dist/index.js"() {
+    "../node_modules/@codemirror/commands/dist/index.js"() {
       init_dist();
       init_dist2();
       init_dist5();
