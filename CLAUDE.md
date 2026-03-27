@@ -82,3 +82,4 @@ plan.md              — Feature plan and implementation roadmap
 
 - **Every new feature must be documented in `plan.md`** before implementation begins, following the existing format (problem, goal, implementation details, edge cases, affected files).
 - **Every feature must have Playwright test coverage** in `tests/editor.spec.js`. Tests should be written as part of the feature implementation, not as a separate step.
+- **Track progress with local git commits.** Make commits at meaningful checkpoints — e.g., after completing a feature, fixing a bug, or reaching a stable intermediate state. This makes it easy to revert if something goes wrong. Don't commit every tiny edit, but don't wait until everything is done either. A good rule of thumb: if you'd be frustrated losing the work since the last commit, it's time to commit.
