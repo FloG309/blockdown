@@ -458,46 +458,75 @@ function enterMermaidEditMode(container) {
     const source = container.getAttribute('data-mermaid-source') || '';
     const parent = container.parentNode;
     const nextSibling = container.nextSibling;
+    const totalHeight = container.offsetHeight;
 
     // Clean up document-level listeners from this container's zoom/pan
     if (container._onMouseMove) document.removeEventListener('mousemove', container._onMouseMove);
     if (container._onMouseUp) document.removeEventListener('mouseup', container._onMouseUp);
 
-    const textarea = document.createElement('textarea');
-    textarea.value = '```mermaid\n' + source + '\n```';
-    textarea.style.width = '100%';
-    textarea.rows = Math.max(5, source.split('\n').length + 2);
+    const markdownText = '```mermaid\n' + source + '\n```';
 
-    // Auto-resize
-    textarea.addEventListener('input', function () {
-        this.style.height = 'auto';
-        this.style.height = this.scrollHeight + 'px';
-    });
-
-    // Handle Shift+Enter / Escape to re-render
-    textarea.addEventListener('keydown', function(e) {
-        if ((e.key === 'Enter' && e.shiftKey) || e.key === 'Escape') {
-            e.preventDefault();
-            const savedIndex = currentSelectedIndex;
-            const insertedNodes = renderMarkdownPartial(textarea);
-            selectInsertedNodes(insertedNodes, savedIndex);
-        } else if (e.key === 'Tab') {
-            e.preventDefault();
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            const spaces = '    ';
-            textarea.value = textarea.value.substring(0, start) + spaces + textarea.value.substring(end);
-            textarea.selectionStart = textarea.selectionEnd = start + spaces.length;
-            textarea.dispatchEvent(new Event('input'));
+    if (window.CM && window.CM.createMermaidEditor) {
+        // Use CodeMirror with mermaid linting
+        const wrapper = document.createElement('div');
+        wrapper.className = 'cm-wrapper';
+        wrapper.style.width = '100%';
+        if (totalHeight > 0) {
+            wrapper.style.minHeight = totalHeight + 'px';
         }
-    });
 
-    // Replace the container with the textarea
-    parent.insertBefore(textarea, nextSibling);
-    container.remove();
+        parent.insertBefore(wrapper, nextSibling);
+        container.remove();
 
-    textarea.focus();
-    setupSelectionHandlers();
+        const onExit = (text) => {
+            wrapper.setAttribute('data-markdown-text', text);
+            pushUndo();
+            const savedIndex = currentSelectedIndex;
+            const insertedNodes = renderMarkdownPartial(wrapper);
+            selectInsertedNodes(insertedNodes, savedIndex);
+        };
+
+        const view = window.CM.createMermaidEditor(wrapper, markdownText, onExit);
+        wrapper._cmView = view;
+        view.focus();
+        scrollCMCursorIntoView(view);
+
+        setupSelectionHandlers();
+    } else {
+        // Fallback to textarea if CM not loaded
+        const textarea = document.createElement('textarea');
+        textarea.value = markdownText;
+        textarea.style.width = '100%';
+        textarea.rows = Math.max(5, source.split('\n').length + 2);
+
+        textarea.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = this.scrollHeight + 'px';
+        });
+
+        textarea.addEventListener('keydown', function(e) {
+            if ((e.key === 'Enter' && e.shiftKey) || e.key === 'Escape') {
+                e.preventDefault();
+                const savedIndex = currentSelectedIndex;
+                const insertedNodes = renderMarkdownPartial(textarea);
+                selectInsertedNodes(insertedNodes, savedIndex);
+            } else if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const spaces = '    ';
+                textarea.value = textarea.value.substring(0, start) + spaces + textarea.value.substring(end);
+                textarea.selectionStart = textarea.selectionEnd = start + spaces.length;
+                textarea.dispatchEvent(new Event('input'));
+            }
+        });
+
+        parent.insertBefore(textarea, nextSibling);
+        container.remove();
+
+        textarea.focus();
+        setupSelectionHandlers();
+    }
 }
 
 function resetToFit(container) {

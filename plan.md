@@ -191,13 +191,29 @@ All features are interaction-heavy, so **Playwright E2E tests** remain the prima
 
 ---
 
-## Bug Fix 2: Mermaid Syntax Error UI Feedback
+## Bug Fix 2: Mermaid Syntax Error UI Feedback ✅
 
 **Problem:** When a user writes invalid mermaid syntax, `mermaid.render()` throws and the error is logged to `console.error()` only. The `<pre><code>` block remains unchanged with no visual indication that rendering failed. The user has no way to know the diagram is broken without opening DevTools.
 
-**Goal:** Show an inline error message to the user when mermaid rendering fails. Display the error text in a styled error block (e.g. red-bordered container with the error message) so the user can see what went wrong and fix their syntax.
+**Goal:** Show inline error feedback while editing mermaid blocks, so the user can see and fix syntax errors without leaving edit mode.
 
-**Affected area:** `mermaid.js` — `processMermaidBlocks()` catch block. `styles.css` — new `.mermaid-error` styling.
+**Approach: CodeMirror + inline linting (Option D)**
+
+Instead of a static error block shown after render failure, mermaid blocks now use a dedicated CodeMirror editor with `@codemirror/lint` integration. When editing a mermaid block, the linter calls `mermaid.parse()` on a 500ms debounce as the user types. Errors produce:
+- A **red gutter marker** on the offending line
+- A **red underline highlight** (`cm-lintRange-error`) on the error line
+- A **tooltip with the full error message** on hover/click of the gutter marker
+- Errors include mermaid's parser output: line number, caret position, and expected tokens
+
+**Implementation:**
+1. Added `@codemirror/lint` to dependencies and imported `linter` + `lintGutter` in `codemirrorSetup.src.js`
+2. Created `mermaidLinter()` — a CM linter source that extracts mermaid source from between fences, calls `mermaid.parse()`, parses the error line number from the error message, and maps it back to the editor's coordinate space
+3. Created `createMermaidEditor()` — like `createMarkdownEditor()` but with monospace font, lint gutter, and the mermaid linter extension
+4. Updated `enterMermaidEditMode()` in `mermaid.js` to use CM instead of a plain textarea (with textarea fallback)
+5. Updated `createEditElement()` in `events.js` to detect mermaid content and use the mermaid-specific editor
+6. Added lint-related CSS in `styles.css` for error diagnostics, underlines, and tooltips
+
+**Affected files:** `codemirrorSetup.src.js`, `codemirrorBundle.js` (rebuilt), `mermaid.js`, `events.js`, `styles.css`, `package.json`
 
 ---
 

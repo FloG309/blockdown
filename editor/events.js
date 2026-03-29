@@ -507,7 +507,12 @@ function createEditElement(markdown, totalHeight, firstTag, parent, insertBefore
             selectInsertedNodes(insertedNodes, savedIndex);
         };
 
-        const view = window.CM.createMarkdownEditor(wrapper, markdown, onExit);
+        // Use mermaid-specific editor (with linting) if content is a mermaid block
+        const isMermaid = /^```mermaid\b/m.test(markdown.trim());
+        const createFn = isMermaid && window.CM.createMermaidEditor
+            ? window.CM.createMermaidEditor
+            : window.CM.createMarkdownEditor;
+        const view = createFn(wrapper, markdown, onExit);
         wrapper._cmView = view;
 
         // Focus the editor and scroll the cursor into view

@@ -501,3 +501,106 @@ textarea:focus {
 .cm-md-blank-line {
   padding-bottom: 0.8em;
 }
+
+/* ── CodeMirror lint / error styling ─────────────────────── */
+
+.cm-gutter-lint {
+  width: 1.6em;
+}
+
+.cm-gutter-lint .cm-lint-marker {
+  width: 1em;
+  height: 1em;
+}
+
+.cm-gutter-lint .cm-lint-marker-error {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border-radius: 50%;
+  background-color: #dc2626;
+  position: relative;
+}
+
+.cm-gutter-lint .cm-lint-marker-error::after {
+  content: "!";
+  color: white;
+  font-size: 0.75em;
+  font-weight: 700;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+}
+
+.cm-lintRange-error {
+  background-color: rgba(220, 38, 38, 0.12);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='m0 3 l2 -2 l1 0 l2 2 l1 0' stroke='%23dc2626' fill='none' stroke-width='.8'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: bottom;
+  background-size: 6px 3px;
+  padding-bottom: 1px;
+}
+
+/* Error line background highlight */
+.cm-mermaid-error-line {
+  background-color: rgba(220, 38, 38, 0.1);
+}
+
+/* Inline error widget rendered directly below the offending line */
+.cm-mermaid-error-widget {
+  background-color: #fef2f2;
+  border-left: 3px solid #dc2626;
+  border-bottom: 1px solid #fca5a5;
+  padding: 6px 10px;
+  margin: 2px 0 4px 1.6em;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #991b1b;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cm-mermaid-error-header {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.cm-mermaid-error-details {
+  opacity: 0.85;
+  font-size: 0.78rem;
+}
+
+/* Hover tooltip from gutter marker */
+.cm-lint-tooltip {
+  background-color: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.85rem;
+  color: #991b1b;
+  max-width: 500px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.cm-diagnostic {
+  padding: 4px 8px;
+  margin: 2px 0;
+  border-radius: 3px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cm-diagnostic-error {
+  background-color: #fef2f2;
+  border-left: 3px solid #dc2626;
+  color: #991b1b;
+}

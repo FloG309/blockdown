@@ -1251,3 +1251,163 @@ test.describe('Minor UI fixes', () => {
   });
 });
 
+// =============================================================
+// Bug Fix 2: Mermaid syntax error inline display
+// =============================================================
+
+test.describe('Bug Fix 2: Mermaid syntax error UI', () => {
+  test('mermaid edit mode uses CodeMirror editor', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Wait for mermaid container to render
+    await page.waitForSelector('#preview .mermaid-container', { timeout: 10000 });
+
+    // Navigate to the mermaid block and enter edit mode
+    const mermaidContainer = page.locator('#preview .mermaid-container').first();
+    await mermaidContainer.click();
+    await pressKey(page, 'Enter');
+
+    // Should have a CM editor, not a plain textarea
+    await page.waitForSelector('#preview .cm-wrapper .cm-editor', { timeout: 5000 });
+    const cmEditor = page.locator('#preview .cm-wrapper .cm-editor');
+    await expect(cmEditor).toBeVisible();
+
+    // Should NOT have a textarea for this block
+    const textareas = page.locator('#preview > textarea');
+    await expect(textareas).toHaveCount(0);
+  });
+
+  test('invalid mermaid syntax shows lint error in editor', async ({ page }) => {
+    await waitForEditor(page);
+    await page.waitForSelector('#preview .mermaid-container', { timeout: 10000 });
+
+    // Navigate to mermaid block and enter edit mode
+    const mermaidContainer = page.locator('#preview .mermaid-container').first();
+    await mermaidContainer.click();
+    await pressKey(page, 'Enter');
+    await page.waitForSelector('#preview .cm-wrapper .cm-editor', { timeout: 5000 });
+
+    // Replace content with invalid mermaid syntax
+    await page.evaluate(() => {
+      const wrapper = document.querySelector('#preview .cm-wrapper');
+      if (wrapper && wrapper._cmView) {
+        const view = wrapper._cmView;
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: '```mermaid\ngraph TD\n  A[Start -->>\n```' }
+        });
+      }
+    });
+
+    // Wait for inline error widget to appear below the offending line
+    await expect(page.locator('.cm-mermaid-error-widget')).toBeVisible({ timeout: 5000 });
+
+    // The offending line should be highlighted
+    await expect(page.locator('.cm-mermaid-error-line')).toHaveCount(1);
+  });
+
+  test('valid mermaid syntax shows no lint errors', async ({ page }) => {
+    await waitForEditor(page);
+    await page.waitForSelector('#preview .mermaid-container', { timeout: 10000 });
+
+    // Navigate to mermaid block and enter edit mode
+    const mermaidContainer = page.locator('#preview .mermaid-container').first();
+    await mermaidContainer.click();
+    await pressKey(page, 'Enter');
+    await page.waitForSelector('#preview .cm-wrapper .cm-editor', { timeout: 5000 });
+
+    // Content should be valid mermaid — wait for linter to settle
+    await page.waitForTimeout(800);
+
+    // No error diagnostics should be present
+    const diagnostic = page.locator('.cm-diagnostic-error');
+    await expect(diagnostic).toHaveCount(0);
+  });
+
+  test('lint error highlights the offending line', async ({ page }) => {
+    await waitForEditor(page);
+    await page.waitForSelector('#preview .mermaid-container', { timeout: 10000 });
+
+    // Navigate to mermaid block and enter edit mode
+    const mermaidContainer = page.locator('#preview .mermaid-container').first();
+    await mermaidContainer.click();
+    await pressKey(page, 'Enter');
+    await page.waitForSelector('#preview .cm-wrapper .cm-editor', { timeout: 5000 });
+
+    // Write invalid syntax
+    await page.evaluate(() => {
+      const wrapper = document.querySelector('#preview .cm-wrapper');
+      if (wrapper && wrapper._cmView) {
+        const view = wrapper._cmView;
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: '```mermaid\ngraph TD\n  A --> B\n  C -->> invalid\n```' }
+        });
+      }
+    });
+
+    // Wait for inline error widget to appear
+    await expect(page.locator('.cm-mermaid-error-widget')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('fixing syntax error clears the lint diagnostic', async ({ page }) => {
+    await waitForEditor(page);
+    await page.waitForSelector('#preview .mermaid-container', { timeout: 10000 });
+
+    // Navigate to mermaid block and enter edit mode
+    const mermaidContainer = page.locator('#preview .mermaid-container').first();
+    await mermaidContainer.click();
+    await pressKey(page, 'Enter');
+    await page.waitForSelector('#preview .cm-wrapper .cm-editor', { timeout: 5000 });
+
+    // Write invalid syntax
+    await page.evaluate(() => {
+      const wrapper = document.querySelector('#preview .cm-wrapper');
+      if (wrapper && wrapper._cmView) {
+        const view = wrapper._cmView;
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: '```mermaid\ngraph TD\n  A[Start -->>\n```' }
+        });
+      }
+    });
+
+    // Wait for inline error widget to appear
+    await expect(page.locator('.cm-mermaid-error-widget')).toHaveCount(1, { timeout: 5000 });
+
+    // Now fix the syntax
+    await page.evaluate(() => {
+      const wrapper = document.querySelector('#preview .cm-wrapper');
+      if (wrapper && wrapper._cmView) {
+        const view = wrapper._cmView;
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: '```mermaid\ngraph TD\n  A[Start] --> B[End]\n```' }
+        });
+      }
+    });
+
+    // Wait for linter to re-run and error widget to disappear
+    await expect(page.locator('.cm-mermaid-error-widget')).toHaveCount(0, { timeout: 5000 });
+  });
+
+  test('Shift+Enter exits mermaid CM editor and re-renders diagram', async ({ page }) => {
+    await waitForEditor(page);
+    await page.waitForSelector('#preview .mermaid-container', { timeout: 10000 });
+
+    // Navigate to mermaid block and enter edit mode
+    const mermaidContainer = page.locator('#preview .mermaid-container').first();
+    await mermaidContainer.click();
+    await pressKey(page, 'Enter');
+    await page.waitForSelector('#preview .cm-wrapper .cm-editor', { timeout: 5000 });
+
+    // Exit with Shift+Enter
+    await page.keyboard.press('Shift+Enter');
+
+    // Should re-render as a mermaid container
+    await page.waitForSelector('#preview .mermaid-container', { timeout: 10000 });
+    const container = page.locator('#preview .mermaid-container');
+    await expect(container).toBeVisible();
+
+    // CM editor should be gone
+    const cmEditor = page.locator('#preview .cm-wrapper');
+    await expect(cmEditor).toHaveCount(0);
+  });
+});
+
