@@ -5,11 +5,16 @@ let undoStack = [];
 let redoStack = [];
 const UNDO_LIMIT = 50;
 
-// Take a snapshot of the current preview state
+// Take a snapshot of the current preview state (excluding the settings anchor)
 function takeSnapshot() {
     const preview = document.getElementById('preview');
+    const anchor = document.getElementById('settings-anchor');
+    // Temporarily remove settings anchor so it's not included in snapshot
+    if (anchor) anchor.remove();
+    const html = preview.innerHTML;
+    if (anchor) preview.insertBefore(anchor, preview.firstChild);
     return {
-        html: preview.innerHTML,
+        html: html,
         selectedIndex: currentSelectedIndex
     };
 }
@@ -27,7 +32,9 @@ function pushUndo() {
 // Restore a snapshot
 function restoreSnapshot(snapshot) {
     const preview = document.getElementById('preview');
+    const anchor = document.getElementById('settings-anchor');
     preview.innerHTML = snapshot.html;
+    if (anchor) preview.insertBefore(anchor, preview.firstChild);
 
     // Re-apply syntax highlighting
     highlightCodeBlocks(preview);

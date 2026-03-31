@@ -314,6 +314,12 @@ function setupZoomPan(container) {
     document.addEventListener('mousemove', container._onMouseMove);
     document.addEventListener('mouseup', container._onMouseUp);
 
+    // Stop click from bubbling to the container's block click handler
+    // (the mouseup handler above already handles selection)
+    viewport.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
     // Double-click to reset zoom & pan
     viewport.addEventListener('dblclick', (e) => {
         e.stopPropagation();

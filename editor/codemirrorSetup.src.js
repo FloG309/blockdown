@@ -21,7 +21,7 @@ const markdownHighlightStyle = HighlightStyle.define([
   { tag: tags.strong, fontWeight: '600' },
   { tag: tags.emphasis, fontStyle: 'italic' },
   { tag: tags.strikethrough, textDecoration: 'line-through' },
-  { tag: tags.monospace, fontFamily: "'Courier New', Courier, monospace", backgroundColor: '#f0f0f0', borderRadius: '3px' },
+  { tag: tags.monospace, fontFamily: "'Courier New', Courier, monospace", borderRadius: '3px' },
   { tag: tags.url, color: '#0366d6' },
   { tag: tags.link, color: '#0366d6' },
   { tag: tags.processingInstruction, color: '#999', fontFamily: "'Courier New', Courier, monospace" },
@@ -30,16 +30,16 @@ const markdownHighlightStyle = HighlightStyle.define([
   { tag: tags.contentSeparator, color: '#999' },
 ]);
 
-// Custom theme matching existing editor aesthetic
+// Custom theme matching existing editor aesthetic — uses CSS variables for dark mode support
 const editorTheme = EditorView.theme({
   '&': {
     fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
     fontSize: '1rem',
-    lineHeight: '1.6',
-    color: '#222',
-    border: '1px solid #555',
+    lineHeight: 'var(--line-height, 1.6)',
+    color: 'var(--text-editor, #222)',
+    border: '1px solid var(--border-strong, #555)',
     borderRadius: '4px',
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--bg-primary, #ffffff)',
   },
   '&.cm-focused': {
     outline: 'none',
@@ -47,17 +47,17 @@ const editorTheme = EditorView.theme({
   },
   '.cm-content': {
     padding: '0.5em',
-    caretColor: '#333',
+    caretColor: 'var(--text-editor, #333)',
     fontFamily: 'inherit',
   },
   '.cm-line': {
     padding: '0 2px',
   },
   '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-    backgroundColor: '#e1f0ff !important',
+    backgroundColor: 'var(--selection-bg, #e1f0ff) !important',
   },
   '.cm-cursor': {
-    borderLeftColor: '#333',
+    borderLeftColor: 'var(--text-editor, #333)',
   },
   '.cm-gutters': {
     display: 'none',

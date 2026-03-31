@@ -467,3 +467,252 @@ ViewPlugin.fromClass(class {
 3. **Feature 6** (copy/paste) — builds on undo infrastructure.
 4. **Feature 8** (textarea height matching) — polish; improves edit-mode UX with no dependencies on other features.
 5. **Feature 9** (CodeMirror 6 edit mode) — depends on Features 7 and 8 being stable. Feature 8's height-matching logic is reused for the CodeMirror container's min-height. Feature 7's syntax highlighting covers rendered blocks; Feature 9 covers edit-mode highlighting — together they provide syntax coloring in both states. Should be implemented last because it replaces a core interaction (textarea → CodeMirror) and all other features must be solid before changing the edit substrate.
+
+---
+
+## Feature 11: Layout Menu & Dark Mode
+
+**Problem:** All layout and styling is hardcoded — font size (16px), line height (1.6), paragraph spacing (1rem), content width (75%), and a single light color palette. Users cannot adjust the reading experience to their preference. There is no dark mode despite it being standard for text-heavy apps.
+
+**Goal:** Let the user adjust font size, line height, paragraph spacing, and content width via a small settings popover. Add a dark/light/system theme toggle. Persist all preferences in localStorage. The settings should be "set once and forget" — accessible via a gear icon but hidden from the main editing surface.
+
+---
+
+### 11A: CSS Custom Properties Refactor
+
+Replace all hardcoded colors, sizes, and spacing with CSS custom properties on `:root`. This is the foundation for theming and layout adjustment.
+
+**Variables to extract:**
+
+Layout:
+- `--font-size`: base font size (default `16px`)
+- `--line-height`: base line height (default `1.6`)
+- `--paragraph-spacing`: margin-bottom on blocks (default `1rem`)
+- `--content-width`: width of `#preview` (default `75%`)
+
+Colors (light defaults):
+- `--bg-primary`: body/page background (`#ffffff`)
+- `--bg-secondary`: code blocks, header, footer (`#f3f4f6`)
+- `--bg-tertiary`: table headers, mermaid containers (`#f9fafb` / `#fafafa`)
+- `--text-primary`: main text (`#333`)
+- `--text-secondary`: blockquote text, footer (`#6b7280`)
+- `--text-editor`: CodeMirror / textarea text (`#222`)
+- `--border-color`: general borders (`#e5e7eb`)
+- `--border-strong`: editor borders, mermaid selected (`#555` / `#2b77d9`)
+- `--selection-bg`: selected block background (`#e1f0ff`)
+- `--accent-color`: focused elements, selection borders (`#2b77d9`)
+- `--link-color`: link text (`#0366d6`)
+- `--code-bg`: inline code background (`#f3f4f6`)
+- `--hr-color`: horizontal rule (`#e5e7eb`)
+
+CodeMirror decorations:
+- `--cm-code-line-bg`: code line background in CM (`#f6f6f6`)
+- `--cm-blockquote-border`: blockquote left border (`#ddd`)
+- `--cm-blockquote-color`: blockquote text (`#666`)
+- `--cm-fence-color`: code fence markers (`#999`)
+
+Error styling:
+- `--error-color`: error accent (`#dc2626`)
+- `--error-bg`: error background (`#fef2f2`)
+- `--error-border`: error border (`#fca5a5`)
+- `--error-text`: error text (`#991b1b`)
+
+**Affected files:** `styles.css` — replace every hardcoded color/size with `var(--name)`.
+
+---
+
+### 11B: Dark Theme
+
+Define `[data-theme="dark"]` overrides for all CSS variables using a Catppuccin Mocha-inspired palette (warm, easy on eyes, popular).
+
+**Dark palette:**
+- `--bg-primary`: `#1e1e2e`
+- `--bg-secondary`: `#181825`
+- `--bg-tertiary`: `#313244`
+- `--text-primary`: `#cdd6f4`
+- `--text-secondary`: `#a6adc8`
+- `--text-editor`: `#cdd6f4`
+- `--border-color`: `#45475a`
+- `--border-strong`: `#585b70`
+- `--selection-bg`: `#2a3a5e`
+- `--accent-color`: `#89b4fa`
+- `--link-color`: `#89b4fa`
+- `--code-bg`: `#181825`
+- `--hr-color`: `#45475a`
+- `--cm-code-line-bg`: `#181825`
+- `--cm-blockquote-border`: `#585b70`
+- `--cm-blockquote-color`: `#a6adc8`
+- `--cm-fence-color`: `#6c7086`
+- `--error-color`: `#f38ba8`
+- `--error-bg`: `#302030`
+- `--error-border`: `#f38ba8`
+- `--error-text`: `#f38ba8`
+
+**System preference detection:** Use `prefers-color-scheme: dark` media query as the default when theme is set to "system".
+
+**Highlight.js theme swap:** Load both `github.min.css` and `github-dark-dimmed.min.css` from CDN. Scope the light theme under `:root:not([data-theme="dark"])` and the dark theme under `[data-theme="dark"]`. Alternatively, dynamically swap the `<link>` href on theme change.
+
+**Mermaid theme swap:** Re-initialize mermaid with `theme: 'dark'` and re-render all existing diagrams when switching to dark mode.
+
+**CodeMirror:** Update `codemirrorSetup.src.js` theme to read from CSS variables instead of hardcoded colors, so CM editors automatically adapt when the theme changes.
+
+**Affected files:** `styles.css`, `editor.html` (hljs dark theme link), `mermaid.js` (re-init), `codemirrorSetup.src.js` (variable-based theme), `codemirrorBundle.js` (rebuild).
+
+---
+
+### 11C: Settings Popover UI
+
+A small gear icon (⚙) in the top-right corner of the page opens a floating popover panel. The popover contains layout and theme controls.
+
+**HTML structure:**
+```html
+<button id="settings-btn" title="Layout settings" aria-label="Layout settings">⚙</button>
+<div id="settings-popover" class="settings-popover hidden">
+  <div class="settings-group">
+    <label>Theme</label>
+    <div class="settings-seg" data-setting="theme">
+      <button data-value="light" title="Light">☀</button>
+      <button data-value="dark" title="Dark">☾</button>
+      <button data-value="system" title="System" class="active">Auto</button>
+    </div>
+  </div>
+  <div class="settings-group">
+    <label>Font Size</label>
+    <div class="settings-seg" data-setting="fontSize">
+      <button data-value="14">S</button>
+      <button data-value="16" class="active">M</button>
+      <button data-value="18">L</button>
+      <button data-value="20">XL</button>
+    </div>
+  </div>
+  <div class="settings-group">
+    <label>Line Height</label>
+    <div class="settings-seg" data-setting="lineHeight">
+      <button data-value="1.4">Tight</button>
+      <button data-value="1.6" class="active">Normal</button>
+      <button data-value="1.8">Relaxed</button>
+    </div>
+  </div>
+  <div class="settings-group">
+    <label>Paragraph Spacing</label>
+    <div class="settings-seg" data-setting="paragraphSpacing">
+      <button data-value="0.5rem">Compact</button>
+      <button data-value="1rem" class="active">Normal</button>
+      <button data-value="1.5rem">Spacious</button>
+    </div>
+  </div>
+  <div class="settings-group">
+    <label>Content Width</label>
+    <div class="settings-seg" data-setting="contentWidth">
+      <button data-value="60%">Narrow</button>
+      <button data-value="75%" class="active">Medium</button>
+      <button data-value="90%">Wide</button>
+    </div>
+  </div>
+</div>
+```
+
+**Behavior:**
+- Click gear icon → toggle popover visibility
+- Click outside popover → close it
+- Each segmented button group: click sets the `active` class and applies the setting immediately
+- Popover does not interfere with block selection or editing (stops propagation)
+- Keyboard: popover should not capture block navigation keys
+
+**Styling:**
+- Gear icon: fixed position top-right, subtle, no background, hover effect
+- Popover: fixed position below gear icon, rounded card with shadow, z-index above everything
+- Segmented buttons: inline flex, rounded group, active button highlighted with accent color
+- Responsive to dark/light theme via CSS variables
+
+**Affected files:** `editor.html` (gear icon + popover HTML), `styles.css` (popover styles), new file `editor/settings.js` (popover logic, event handlers, apply settings, localStorage).
+
+---
+
+### 11D: localStorage Persistence
+
+Store all settings in a single `blockdown-settings` key as a JSON object:
+
+```json
+{
+  "theme": "system",
+  "fontSize": 16,
+  "lineHeight": 1.6,
+  "paragraphSpacing": "1rem",
+  "contentWidth": "75%"
+}
+```
+
+**On page load:**
+1. Read `blockdown-settings` from localStorage
+2. Apply each setting by updating the corresponding CSS variable on `:root`
+3. For theme: set `data-theme` attribute on `<html>`, handle "system" via `matchMedia('(prefers-color-scheme: dark)')`
+4. Update popover button active states to match stored values
+
+**On setting change:**
+1. Update the CSS variable immediately
+2. Write the full settings object to localStorage
+3. For theme changes: update `data-theme`, re-init mermaid theme, swap hljs styles
+
+**Affected files:** `editor/settings.js`.
+
+---
+
+### 11E: Keyboard Shortcuts
+
+- `Ctrl + =` / `Ctrl + -`: increase / decrease font size by one step (cycle through 14 → 16 → 18 → 20)
+- `Ctrl + Shift + L`: toggle theme (light → dark → system → light)
+
+These shortcuts are only active in navigation mode (not inside editors).
+
+**Affected files:** `base.js` (keydown handler), `editor/settings.js` (expose `cycleFontSize()` and `cycleTheme()` functions).
+
+---
+
+### Edge cases
+
+- **Active CodeMirror editors:** When font size or line height changes, any open CM editor should update. Since CM reads CSS variables from the host page, changes propagate automatically if the CM theme uses `var()` references. If not, open editors may need a `requestMeasure()` call.
+- **Mermaid re-render on theme change:** Re-initializing mermaid with a new theme and re-rendering all diagrams may be slow if many diagrams exist. Debounce or batch.
+- **System theme detection:** Listen to `matchMedia('(prefers-color-scheme: dark)')` `change` event so the editor reacts to OS-level theme switches in real time.
+- **First load with no stored settings:** Use sensible defaults (system theme, 16px, 1.6 line height, 1rem spacing, 75% width).
+- **Settings popover z-index:** Must be above mermaid containers, CM editors, and the rubberband overlay.
+- **Highlight.js theme swap:** Ensure both light and dark theme CSS are loaded but only one is active. Use `media` attribute or `disabled` property on `<link>` elements to toggle.
+
+---
+
+### Testing — Playwright (Feature 11)
+
+**Settings popover:**
+- Click gear icon → verify popover appears
+- Click outside → verify popover closes
+- Click gear icon again → verify popover toggles
+
+**Font size:**
+- Open settings → click "L" (18px) → verify `--font-size` on `:root` is `18px`
+- Verify text in `#preview` renders at the new size (computed style check)
+- Reload page → verify setting persists from localStorage
+
+**Line height:**
+- Click "Relaxed" → verify `--line-height` is `1.8`
+
+**Content width:**
+- Click "Narrow" → verify `#preview` width changes
+
+**Dark mode:**
+- Click dark theme → verify `data-theme="dark"` on `<html>`
+- Verify background color changes (computed style)
+- Verify mermaid diagram re-renders with dark theme
+- Click system → verify `data-theme` reflects OS preference
+
+**Keyboard shortcuts:**
+- `Ctrl+=` → verify font size increases by one step
+- `Ctrl+Shift+L` → verify theme cycles
+
+**localStorage persistence:**
+- Change multiple settings → reload → verify all settings restored
+- Verify popover active buttons match stored settings after reload
+
+**Integration:**
+- Change font size → enter edit mode → verify CM editor text renders at new size
+- Switch to dark mode → enter edit mode → verify CM editor has dark styling
+- Dark mode + mermaid: render a mermaid block → switch to dark → verify diagram has dark theme colors
