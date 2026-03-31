@@ -9,9 +9,9 @@ let _previewScrolling = false;
 let _scrollTimer = null;
 
 function initScrollTracker() {
-    const preview = document.getElementById('preview');
-    if (!preview) return;
-    preview.addEventListener('scroll', () => {
+    const scrollContainer = document.getElementById('preview-container') || document.getElementById('preview');
+    if (!scrollContainer) return;
+    scrollContainer.addEventListener('scroll', () => {
         _previewScrolling = true;
         clearTimeout(_scrollTimer);
         _scrollTimer = setTimeout(() => { _previewScrolling = false; }, 300);
