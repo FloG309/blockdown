@@ -8,16 +8,16 @@
  */
 function scrollCMCursorIntoView(view) {
     setTimeout(() => {
-        const preview = document.getElementById('preview');
-        if (!preview) return;
+        const scrollContainer = document.getElementById('preview-container');
+        if (!scrollContainer) return;
         const coords = view.coordsAtPos(view.state.selection.main.head);
         if (!coords) return;
-        const previewRect = preview.getBoundingClientRect();
-        const cursorInPreview = coords.top - previewRect.top;
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const cursorInContainer = coords.top - containerRect.top;
         // Only scroll if the cursor is outside the visible area
-        if (cursorInPreview < 0 || cursorInPreview > preview.clientHeight) {
-            const targetScrollTop = preview.scrollTop + cursorInPreview - preview.clientHeight / 2;
-            preview.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+        if (cursorInContainer < 0 || cursorInContainer > scrollContainer.clientHeight) {
+            const targetScrollTop = scrollContainer.scrollTop + cursorInContainer - scrollContainer.clientHeight / 2;
+            scrollContainer.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
         }
     }, 50);
 }
@@ -352,15 +352,16 @@ function setupSelectionHandlers() {
     // Get all potential selectable elements - include .cm-wrapper and .mermaid-container
     selectableElements = Array.from(preview.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6, :scope > p, :scope > ul, :scope > ol, :scope > pre, :scope > blockquote, :scope > table, :scope > hr, :scope > textarea, :scope > .cm-wrapper, :scope > .mermaid-container, :scope > .mermaid-placeholder'));
 
-    // Add click event to each element
+    // Add click event to each element (skip if already bound to avoid duplicate handlers)
     selectableElements.forEach((el, index) => {
         el.setAttribute('data-index', index);
+        if (el._blockClickBound) return;
+        el._blockClickBound = true;
         el.addEventListener('click', function(e) {
             e.stopPropagation();
 
-            deselectAll();
-
             if (this.tagName === 'TEXTAREA') {
+                deselectAll();
                 // Clicking a textarea re-focuses it — focus/blur handlers manage .selected
                 this.focus();
             } else {
@@ -369,15 +370,26 @@ function setupSelectionHandlers() {
                 if (focused && focused.tagName === 'TEXTAREA') {
                     focused.blur();
                 }
+
+                // If this block is already the only selected block, deselect it
+                const wasSelected = this.classList.contains('selected');
+                const selectedCount = document.querySelectorAll('.selected').length;
+                deselectAll();
+                if (wasSelected && selectedCount === 1) {
+                    currentSelectedIndex = -1;
+                    return;
+                }
                 toggleSelection(this);
             }
             currentSelectedIndex = parseInt(this.getAttribute('data-index'));
         });
     });
 
-    // Add click handlers to inner elements
+    // Add click handlers to inner elements (skip if already bound)
     const innerElements = Array.from(preview.querySelectorAll('li, code, td, th, a, img'));
     innerElements.forEach(el => {
+        if (el._innerClickBound) return;
+        el._innerClickBound = true;
         el.addEventListener('click', function(e) {
             handleClick(e)
         });

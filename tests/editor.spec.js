@@ -1413,3 +1413,321 @@ test.describe('Bug Fix 2: Mermaid syntax error UI', () => {
   });
 });
 
+// ──────────────────────────────────────────────────────────
+// Feature 11: Layout Menu & Dark Mode
+// ──────────────────────────────────────────────────────────
+
+test.describe('Feature 11: Layout Menu & Dark Mode', () => {
+
+  // ── Settings popover ────────────────────────────────────
+
+  test('gear icon opens and closes settings popover', async ({ page }) => {
+    await waitForEditor(page);
+
+    const btn = page.locator('#settings-btn');
+    const popover = page.locator('#settings-popover');
+
+    // Initially hidden
+    await expect(popover).toHaveClass(/hidden/);
+
+    // Click gear → opens
+    await btn.click();
+    await expect(popover).not.toHaveClass(/hidden/);
+
+    // Click outside → closes
+    await page.locator('#preview').click({ position: { x: 5, y: 5 } });
+    await expect(popover).toHaveClass(/hidden/);
+
+    // Click gear again → opens
+    await btn.click();
+    await expect(popover).not.toHaveClass(/hidden/);
+
+    // Click gear once more → closes (toggle)
+    await btn.click();
+    await expect(popover).toHaveClass(/hidden/);
+  });
+
+  // ── Font size ───────────────────────────────────────────
+
+  test('changing font size updates CSS variable', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Open popover and click "L" (18px)
+    await page.locator('#settings-btn').click();
+    await page.locator('.settings-seg[data-setting="fontSize"] button[data-value="18"]').click();
+
+    const fontSize = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--font-size').trim()
+    );
+    expect(fontSize).toBe('18px');
+
+    // Verify the button is marked active
+    const isActive = await page.locator('.settings-seg[data-setting="fontSize"] button[data-value="18"]').evaluate(
+      el => el.classList.contains('active')
+    );
+    expect(isActive).toBe(true);
+  });
+
+  test('font size persists after reload', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Set font size to 20
+    await page.locator('#settings-btn').click();
+    await page.locator('.settings-seg[data-setting="fontSize"] button[data-value="20"]').click();
+
+    // Reload
+    await page.reload();
+    await waitForEditor(page);
+
+    const fontSize = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--font-size').trim()
+    );
+    expect(fontSize).toBe('20px');
+
+    // Verify active button matches
+    await page.locator('#settings-btn').click();
+    const isActive = await page.locator('.settings-seg[data-setting="fontSize"] button[data-value="20"]').evaluate(
+      el => el.classList.contains('active')
+    );
+    expect(isActive).toBe(true);
+  });
+
+  // ── Line height (slider) ─────────────────────────────────
+
+  test('line height slider updates CSS variable', async ({ page }) => {
+    await waitForEditor(page);
+
+    await page.locator('#settings-btn').click();
+    const slider = page.locator('input[data-setting="lineHeight"]');
+    await slider.fill('1.8');
+    await slider.dispatchEvent('input');
+
+    const lineHeight = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--line-height').trim()
+    );
+    expect(lineHeight).toBe('1.8');
+
+    // Verify display label
+    const display = await page.locator('[data-display="lineHeight"]').textContent();
+    expect(display).toBe('1.8');
+  });
+
+  // ── Content width (drag gear button) ──────────────────────
+
+  test('dragging gear button changes content width', async ({ page }) => {
+    await waitForEditor(page);
+
+    const btn = page.locator('#settings-btn');
+    const box = await btn.boundingBox();
+
+    // Drag the gear button 100px to the right
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 100, box.y + box.height / 2, { steps: 5 });
+
+    // Guide lines should be visible during drag
+    const guides = page.locator('.content-width-guide');
+    await expect(guides).toHaveCount(2);
+
+    await page.mouse.up();
+
+    // Guides should disappear
+    await expect(guides).toHaveCount(0);
+
+    // Content width should have changed from default 75%
+    const width = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--content-width').trim()
+    );
+    expect(width).not.toBe('75%');
+  });
+
+  // ── Paragraph spacing (slider) ──────────────────────────
+
+  test('paragraph spacing slider updates CSS variable', async ({ page }) => {
+    await waitForEditor(page);
+
+    await page.locator('#settings-btn').click();
+    const slider = page.locator('input[data-setting="paragraphSpacing"]');
+    await slider.fill('1.5');
+    await slider.dispatchEvent('input');
+
+    const spacing = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--paragraph-spacing').trim()
+    );
+    expect(spacing).toBe('1.5rem');
+
+    const display = await page.locator('[data-display="paragraphSpacing"]').textContent();
+    expect(display).toBe('1.5rem');
+  });
+
+  // ── Click to deselect ────────────────────────────────────
+
+  test('clicking a selected block deselects it', async ({ page }) => {
+    await waitForEditor(page);
+
+    const block = page.locator('#preview > h2').first();
+    // Click to select
+    await block.click();
+    await expect(block).toHaveClass(/selected/);
+
+    // Click again to deselect
+    await block.click();
+    const hasSelected = await block.evaluate(el => el.classList.contains('selected'));
+    expect(hasSelected).toBe(false);
+  });
+
+  // ── Dark mode ───────────────────────────────────────────
+
+  test('dark theme sets data-theme attribute and changes background', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Click dark
+    await page.locator('#settings-btn').click();
+    await page.locator('.settings-seg[data-setting="theme"] button[data-value="dark"]').click();
+
+    const theme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    expect(theme).toBe('dark');
+
+    // Background should be dark
+    const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    // #1e1e2e = rgb(30, 30, 46)
+    expect(bg).toBe('rgb(30, 30, 46)');
+  });
+
+  test('light theme restores light background', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Set dark first
+    await page.locator('#settings-btn').click();
+    await page.locator('.settings-seg[data-setting="theme"] button[data-value="dark"]').click();
+
+    // Then light
+    await page.locator('.settings-seg[data-setting="theme"] button[data-value="light"]').click();
+
+    const theme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    expect(theme).toBe('light');
+
+    const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    // #ffffff = rgb(255, 255, 255)
+    expect(bg).toBe('rgb(255, 255, 255)');
+  });
+
+  test('dark mode persists after reload', async ({ page }) => {
+    await waitForEditor(page);
+
+    await page.locator('#settings-btn').click();
+    await page.locator('.settings-seg[data-setting="theme"] button[data-value="dark"]').click();
+
+    await page.reload();
+    await waitForEditor(page);
+
+    const theme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    expect(theme).toBe('dark');
+  });
+
+  // ── Keyboard shortcuts ──────────────────────────────────
+
+  test('Ctrl+= increases font size by one step', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Default is 16, Ctrl+= should go to 18
+    await page.keyboard.press('Control+=');
+
+    const fontSize = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--font-size').trim()
+    );
+    expect(fontSize).toBe('18px');
+  });
+
+  test('Ctrl+- decreases font size by one step', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Set to 18 first
+    await page.locator('#settings-btn').click();
+    await page.locator('.settings-seg[data-setting="fontSize"] button[data-value="18"]').click();
+    await page.locator('#settings-btn').click(); // close popover
+
+    await page.keyboard.press('Control+-');
+
+    const fontSize = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--font-size').trim()
+    );
+    expect(fontSize).toBe('16px');
+  });
+
+  test('Ctrl+Shift+L cycles theme between light and dark', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Default is light → should cycle to dark
+    await page.keyboard.press('Control+Shift+L');
+    let theme = await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem('blockdown-settings') || '{}');
+      return s.theme;
+    });
+    expect(theme).toBe('dark');
+
+    // dark → light
+    await page.keyboard.press('Control+Shift+L');
+    theme = await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem('blockdown-settings') || '{}');
+      return s.theme;
+    });
+    expect(theme).toBe('light');
+  });
+
+  // ── Dark mode + CodeMirror integration ──────────────────
+
+  test('CM editor adapts to dark mode', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Switch to dark
+    await page.locator('#settings-btn').click();
+    await page.locator('.settings-seg[data-setting="theme"] button[data-value="dark"]').click();
+    await page.locator('#settings-btn').click(); // close
+
+    // Select first block and enter edit mode
+    const firstBlock = page.locator('#preview > h2').first();
+    await firstBlock.click();
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    // CM editor background should be dark (--bg-primary is #1e1e2e)
+    const cmBg = await page.evaluate(() => {
+      const cm = document.querySelector('.cm-editor');
+      return cm ? getComputedStyle(cm).backgroundColor : '';
+    });
+    expect(cmBg).toBe('rgb(30, 30, 46)');
+  });
+
+  // ── Multiple settings persist together ──────────────────
+
+  test('multiple settings persist together across reload', async ({ page }) => {
+    await waitForEditor(page);
+
+    await page.locator('#settings-btn').click();
+    await page.locator('.settings-seg[data-setting="fontSize"] button[data-value="14"]').click();
+
+    const lhSlider = page.locator('input[data-setting="lineHeight"]');
+    await lhSlider.fill('1.4');
+    await lhSlider.dispatchEvent('input');
+
+    await page.locator('.settings-seg[data-setting="theme"] button[data-value="dark"]').click();
+
+    await page.reload();
+    await waitForEditor(page);
+
+    const settings = await page.evaluate(() => {
+      const style = getComputedStyle(document.documentElement);
+      return {
+        fontSize: style.getPropertyValue('--font-size').trim(),
+        lineHeight: style.getPropertyValue('--line-height').trim(),
+        theme: document.documentElement.getAttribute('data-theme'),
+      };
+    });
+
+    expect(settings.fontSize).toBe('14px');
+    expect(settings.lineHeight).toBe('1.4');
+    expect(settings.theme).toBe('dark');
+  });
+});
+

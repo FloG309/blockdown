@@ -95,7 +95,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to render markdown to HTML
     async function renderMarkdown() {
         const html = marked.parse(markdownText);
+        // Preserve the settings anchor across full re-renders
+        const settingsAnchor = document.getElementById('settings-anchor');
         preview.innerHTML = html;
+        if (settingsAnchor) preview.insertBefore(settingsAnchor, preview.firstChild);
 
         // Apply syntax highlighting to code blocks
         highlightCodeBlocks(preview);
@@ -121,6 +124,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const isCMEditor = e.target.closest && e.target.closest('.cm-editor');
         const isInput = e.target.tagName === 'INPUT' || e.target.isContentEditable;
         const isEditing = isTextarea || isCMEditor || isInput;
+
+        // Layout keyboard shortcuts (Ctrl+= / Ctrl+- for font size, Ctrl+Shift+L for theme)
+        if (e.ctrlKey && (e.key === '=' || e.key === '+') && !isEditing) {
+            e.preventDefault();
+            if (window.LayoutSettings) window.LayoutSettings.cycleFontSize(1);
+            return;
+        }
+        if (e.ctrlKey && e.key === '-' && !isEditing) {
+            e.preventDefault();
+            if (window.LayoutSettings) window.LayoutSettings.cycleFontSize(-1);
+            return;
+        }
+        if (e.ctrlKey && e.shiftKey && (e.key === 'L' || e.key === 'l') && !isEditing) {
+            e.preventDefault();
+            if (window.LayoutSettings) window.LayoutSettings.cycleTheme();
+            return;
+        }
 
         // Handle undo/redo (works everywhere, including edit mode)
         // But inside CM editor, let CM handle its own undo unless it's block-level
