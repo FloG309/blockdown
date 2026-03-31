@@ -40,6 +40,8 @@ A block-based markdown editor (Jupyter-style) where rendered content is navigate
 ```
 editor/              — Main editor application
   editor.html        — Entry HTML (loads CDN libs + all JS/CSS)
+  test-large.html    — Test page with large/complex markdown content
+  test-small.html    — Test page with small/simple markdown content
   base.js            — Entry point: default markdown, TurndownService config,
                        DOMContentLoaded handler, keydown dispatcher
   events.js          — All DOM manipulation and event handling:
@@ -48,10 +50,13 @@ editor/              — Main editor application
                        renderMarkdownPartial(), list merging, syntax highlighting
   codemirrorSetup.src.js — CodeMirror 6 source module (bundled by esbuild)
   codemirrorBundle.js    — Pre-built IIFE bundle of CodeMirror 6 (sets window.CM)
+  settings.js        — Layout settings popover, theme switching, drag-to-resize,
+                       localStorage persistence
   undo.js            — Snapshot-based undo/redo (captures #preview innerHTML)
   rubberband.js      — Lasso/rubber-band drag selection over blocks
-  styles.css         — All styling: layout, block selection (#e1f0ff),
-                       pointer-events for compound blocks, CM wrapper styles
+  mermaid.js         — Mermaid diagram rendering, resize, zoom, pan
+  styles.css         — All styling: CSS custom properties for theming,
+                       light/dark mode, layout, block selection, CM wrapper styles
 tests/
   editor.spec.js     — Playwright E2E tests (all features)
 playwright.config.js — Playwright config (chromium, port 3999)
@@ -82,4 +87,5 @@ plan.md              — Feature plan and implementation roadmap
 
 - **Every new feature must be documented in `plan.md`** before implementation begins, following the existing format (problem, goal, implementation details, edge cases, affected files).
 - **Every feature must have Playwright test coverage** in `tests/editor.spec.js`. Tests should be written as part of the feature implementation, not as a separate step.
-- **Track progress with local git commits.** Make commits at meaningful checkpoints — e.g., after completing a feature, fixing a bug, or reaching a stable intermediate state. This makes it easy to revert if something goes wrong. Don't commit every tiny edit, but don't wait until everything is done either. A good rule of thumb: if you'd be frustrated losing the work since the last commit, it's time to commit.
+- **All test HTML pages must stay in sync with `editor.html`.** When `editor.html` changes (new scripts, HTML structure inside `#preview`, `<head>` changes), apply the same changes to `test-large.html` and `test-small.html`. These pages exist to test the editor with different document types and must behave identically — only the content script (`test-*-content.js`) differs.
+- **Track progress with local git commits.** Make commits at meaningful checkpoints — e.g., after completing a feature, fixing a bug, or reaching a stable intermediate state. This makes it easy to revert if something goes wrong. Don't commit every tiny edit, but don't wait until everything is done either. A good rule of thumb: if you'd be frustrated losing the work since the last commit, it's time to commit. When I tell you to commit from main, you should also push your current branch and main to remote.
