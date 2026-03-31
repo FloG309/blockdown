@@ -350,7 +350,7 @@ function deselectAll() {
 // Set up click handlers for selectable elements
 function setupSelectionHandlers() {
     // Get all potential selectable elements - include .cm-wrapper and .mermaid-container
-    selectableElements = Array.from(preview.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6, :scope > p, :scope > ul, :scope > ol, :scope > pre, :scope > blockquote, :scope > table, :scope > hr, :scope > textarea, :scope > .cm-wrapper, :scope > .mermaid-container'));
+    selectableElements = Array.from(preview.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6, :scope > p, :scope > ul, :scope > ol, :scope > pre, :scope > blockquote, :scope > table, :scope > hr, :scope > textarea, :scope > .cm-wrapper, :scope > .mermaid-container, :scope > .mermaid-placeholder'));
 
     // Add click event to each element
     selectableElements.forEach((el, index) => {

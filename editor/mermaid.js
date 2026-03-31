@@ -2,37 +2,136 @@
 
 let mermaidCounter = 0;
 
+// Track whether the #preview container is actively scrolling.
+// Mermaid wheel-zoom is disabled while the page is scrolling so that
+// scrolling past a diagram doesn't accidentally zoom it.
+let _previewScrolling = false;
+let _scrollTimer = null;
+
+function initScrollTracker() {
+    const preview = document.getElementById('preview');
+    if (!preview) return;
+    preview.addEventListener('scroll', () => {
+        _previewScrolling = true;
+        clearTimeout(_scrollTimer);
+        _scrollTimer = setTimeout(() => { _previewScrolling = false; }, 300);
+    }, { passive: true });
+}
+
+// Returns a promise that resolves when the page is not scrolling.
+// If not scrolling, yields once to the macro task queue (setTimeout(0))
+// so the browser can process any pending input events.
+// If scrolling, polls every 50ms until scrolling stops.
+function waitForScrollIdle() {
+    if (!_previewScrolling) {
+        return new Promise(r => setTimeout(r, 0));
+    }
+    return new Promise(resolve => {
+        function check() {
+            if (!_previewScrolling) {
+                resolve();
+            } else {
+                setTimeout(check, 50);
+            }
+        }
+        setTimeout(check, 50);
+    });
+}
+
 function initMermaid() {
     mermaid.initialize({
         startOnLoad: false,
         theme: 'default',
         securityLevel: 'loose'
     });
+    initScrollTracker();
 }
 
-// Scan a container for mermaid code blocks and replace them with interactive SVG containers
+// Create a loading placeholder for a mermaid diagram
+function createMermaidPlaceholder(source) {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'mermaid-placeholder';
+    placeholder.setAttribute('data-mermaid-source', source);
+
+    const spinner = document.createElement('div');
+    spinner.className = 'mermaid-placeholder-spinner';
+
+    const label = document.createElement('span');
+    label.className = 'mermaid-placeholder-label';
+    label.textContent = 'Rendering diagram\u2026';
+
+    placeholder.appendChild(spinner);
+    placeholder.appendChild(label);
+
+    return placeholder;
+}
+
+// Scan a container for mermaid code blocks and replace them with interactive SVG containers.
+// Phase 1: synchronously replace all code blocks with loading placeholders.
+// Phase 2: render each diagram async and swap placeholder for the real container.
 async function processMermaidBlocks(container) {
     const codeBlocks = container.querySelectorAll('pre > code.language-mermaid');
     if (codeBlocks.length === 0) return;
 
+    // Phase 1: Replace all code blocks with placeholders (synchronous)
+    const placeholders = [];
     for (const code of codeBlocks) {
         const pre = code.parentElement;
         const source = code.textContent.trim();
+        const wasSelected = pre.classList.contains('selected');
+
+        const placeholder = createMermaidPlaceholder(source);
+        pre.parentNode.replaceChild(placeholder, pre);
+
+        if (wasSelected) {
+            placeholder.classList.add('selected');
+        }
+
+        placeholders.push({ element: placeholder, source, wasSelected });
+    }
+
+    // Re-register placeholders as selectable so arrow-key nav works during loading
+    setupSelectionHandlers();
+
+    // Yield to the browser so it can paint the text content + placeholders
+    // before starting the expensive mermaid rendering work
+    await new Promise(r => requestAnimationFrame(r));
+
+    // Phase 2: Render each diagram and replace its placeholder
+    for (const { element, source } of placeholders) {
+        // Guard: placeholder may have been removed from DOM (e.g. user deleted it)
+        if (!element.parentNode) continue;
+
         const id = 'mermaid-graph-' + (mermaidCounter++);
         try {
+            // Wait until the user stops scrolling before starting the next
+            // heavy render — this keeps scrolling smooth between diagrams.
+            // Each mermaid.render() is synchronous and can't be interrupted,
+            // but we can avoid starting the next one while the user scrolls.
+            await waitForScrollIdle();
             const { svg } = await mermaid.render(id, source);
-            // Check selection AFTER await — selectInsertedNodes may have run during the yield
-            const wasSelected = pre.classList.contains('selected');
             const mermaidContainer = createMermaidContainer(svg, source);
-            pre.parentNode.replaceChild(mermaidContainer, pre);
 
-            // Preserve selection state across the replacement
-            if (wasSelected) {
+            // Re-check selection — it may have changed during the await
+            const isSelected = element.classList.contains('selected');
+            element.parentNode.replaceChild(mermaidContainer, element);
+
+            if (isSelected) {
                 mermaidContainer.classList.add('selected');
             }
+
+            // Yield so the browser paints each diagram as it completes
+            await new Promise(r => requestAnimationFrame(r));
         } catch (err) {
             console.error('Mermaid render error:', err);
-            // Leave the code block as-is on error
+            // Show error state instead of perpetual spinner
+            const spinner = element.querySelector('.mermaid-placeholder-spinner');
+            if (spinner) spinner.remove();
+            const label = element.querySelector('.mermaid-placeholder-label');
+            if (label) {
+                label.textContent = 'Diagram error';
+                label.style.color = '#dc2626';
+            }
         }
     }
 
@@ -45,6 +144,9 @@ async function processMermaidBlocks(container) {
         const idx = parseInt(selected.getAttribute('data-index'));
         if (!isNaN(idx)) currentSelectedIndex = idx;
     }
+
+    // Signal that all mermaid diagrams have finished rendering
+    container.setAttribute('data-mermaid-ready', 'true');
 }
 
 function createMermaidContainer(svgString, source) {
@@ -232,8 +334,10 @@ function setupZoomPan(container) {
     const indicator = container.querySelector('.mermaid-zoom-indicator');
     const state = container._zoomPan;
 
-    // Zoom via scroll wheel
+    // Zoom via scroll wheel (disabled while the page is actively scrolling)
     viewport.addEventListener('wheel', (e) => {
+        if (_previewScrolling) return;
+
         e.preventDefault();
         e.stopPropagation();
 

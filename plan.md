@@ -460,6 +460,39 @@ ViewPlugin.fromClass(class {
 
 ---
 
+## Feature 11: Incremental Mermaid Rendering with Loading Placeholders
+
+**Problem:** When loading pages with multiple mermaid diagrams (e.g. `test-large.html` with 5 diagrams), the user sees "Loading data..." and then all content appears at once. The markdown/HTML is inserted into the DOM before mermaid processing, but raw `<pre><code>` blocks sit in place with no visual feedback while diagrams render sequentially. On slower machines or with many diagrams this delay is noticeable.
+
+**Goal:** Replace each mermaid code block with an animated loading placeholder immediately, then swap each placeholder with the rendered diagram as it completes. Non-mermaid content (text, headings, code blocks) becomes visible right away.
+
+**Approach: Two-Phase `processMermaidBlocks()`**
+
+Split the existing single loop into two phases:
+
+1. **Phase 1 (synchronous):** Loop over all `pre > code.language-mermaid` elements and replace each with a `.mermaid-placeholder` div containing a CSS spinner and "Rendering diagram..." label. All placeholders appear instantly before any async work begins.
+
+2. **Phase 2 (async, sequential):** Loop over the collected placeholders. For each, call `await mermaid.render()`, then replace the placeholder with the final `.mermaid-container`. Each diagram "pops in" independently as it finishes.
+
+**Implementation details:**
+
+- New helper `createMermaidPlaceholder(source)` in `mermaid.js` creates a div with class `mermaid-placeholder`, a spinning circle (`.mermaid-placeholder-spinner`), and a label (`.mermaid-placeholder-label`). Stores source in `data-mermaid-source`.
+- Phase 2 guards against removed placeholders: `if (!element.parentNode) continue` skips any placeholder deleted by the user during loading.
+- On render error, the spinner is removed and the label text changes to "Diagram error" in red, instead of leaving a perpetually spinning placeholder.
+- `setupSelectionHandlers()` selector updated to include `:scope > .mermaid-placeholder` so placeholders are navigable with arrow keys during loading.
+- TurndownService rule added for `.mermaid-placeholder` so undo/redo snapshots containing placeholders round-trip correctly back to fenced mermaid blocks.
+- CSS: dashed border (vs solid for final container), `min-height: 150px` to reduce layout shift, spinner uses `border-top-color: #2b77d9` matching the editor's accent color, `.selected` state uses `#e1f0ff` / `#2b77d9`.
+
+**Edge cases:**
+- User deletes a placeholder during loading — Phase 2 skips it via parentNode guard.
+- Partial render path (`renderMarkdownPartial` calls `processMermaidBlocks` without await) — Phase 1 is synchronous so placeholders appear immediately; Phase 2 runs in background.
+- Selection state transferred from `<pre>` → placeholder → final container, re-checked after each await.
+- Double invocation — second call finds no `<pre><code class="language-mermaid">` (already replaced by first call's Phase 1), returns immediately.
+
+**Affected files:** `mermaid.js` (two-phase rewrite + placeholder helper), `styles.css` (placeholder styles + spinner animation), `events.js` (selector update), `base.js` (turndown rule), `plan.md`.
+
+---
+
 ## Implementation order
 
 1. **Feature 7** (syntax highlighting) — smallest scope, no interaction with other features, immediate visual payoff.

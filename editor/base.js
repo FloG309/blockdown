@@ -64,6 +64,17 @@ turndownService.options.bulletListMarker = '-';
 // required for CodeMirror line decorations to detect heading lines
 turndownService.options.headingStyle = 'atx';
 
+// Turndown rule: convert mermaid placeholders back to fenced mermaid code blocks (undo/redo)
+turndownService.addRule('mermaidPlaceholder', {
+    filter: function (node) {
+        return node.nodeName === 'DIV' && node.classList.contains('mermaid-placeholder');
+    },
+    replacement: function (content, node) {
+        const source = node.getAttribute('data-mermaid-source') || '';
+        return '\n\n```mermaid\n' + source + '\n```\n\n';
+    }
+});
+
 // Turndown rule: convert mermaid containers back to fenced mermaid code blocks
 turndownService.addRule('mermaidContainer', {
     filter: function (node) {
@@ -88,6 +99,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Apply syntax highlighting to code blocks
         highlightCodeBlocks(preview);
+
+        // Yield so the browser paints text content before mermaid processing starts
+        await new Promise(r => requestAnimationFrame(r));
 
         // Replace mermaid code blocks with rendered SVG diagrams
         await processMermaidBlocks(preview);

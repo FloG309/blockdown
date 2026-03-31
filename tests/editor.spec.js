@@ -7,6 +7,8 @@ async function waitForEditor(page) {
   await page.waitForSelector('#preview h2');
   // Verify CodeMirror bundle loaded (synchronous script, should be ready immediately)
   await page.waitForFunction(() => window.CM && window.CM.ready, { timeout: 5000 });
+  // Wait for all mermaid diagrams to finish rendering (the default content has one)
+  await page.waitForSelector('#preview[data-mermaid-ready="true"]', { timeout: 10000 });
 }
 
 // Helper: get all selectable block elements
