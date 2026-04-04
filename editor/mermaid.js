@@ -41,23 +41,9 @@ function waitForScrollIdle() {
 function initMermaid() {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const config = { startOnLoad: false, securityLevel: 'loose' };
-    if (isDark) {
+    if (isDark && window._getMermaidDarkVars) {
         config.theme = 'base';
-        config.themeVariables = {
-            background: '#1e1e2e',
-            primaryColor: '#313244',
-            primaryTextColor: '#cdd6f4',
-            primaryBorderColor: '#585b70',
-            secondaryColor: '#45475a',
-            tertiaryColor: '#3b3d54',
-            lineColor: '#a6adc8',
-            textColor: '#cdd6f4',
-            mainBkg: '#313244',
-            nodeBorder: '#585b70',
-            clusterBkg: '#2a2a3e',
-            edgeLabelBackground: '#313244',
-            fontFamily: 'system-ui, sans-serif',
-        };
+        config.themeVariables = window._getMermaidDarkVars();
     } else {
         config.theme = 'default';
     }
