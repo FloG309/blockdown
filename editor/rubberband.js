@@ -94,6 +94,10 @@
                 return;
             }
 
+            // Flag so background click handler knows not to deselect
+            window._rubberBandJustFinished = true;
+            setTimeout(() => { window._rubberBandJustFinished = false; }, 0);
+
             // Rubber band selection
             const bandRect = getBandRect();
             bandEl.style.display = 'none';

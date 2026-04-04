@@ -185,7 +185,7 @@ sequenceDiagram
     Dev->>GH: Push to feature branch
     GH->>CI: Webhook trigger
 
-    rect rgb(240, 248, 255)
+    rect rgba(100, 120, 180, 0.15)
         Note over CI: Build Phase
         CI->>CI: Install dependencies
         CI->>CI: Lint (ESLint + Prettier)
@@ -194,7 +194,7 @@ sequenceDiagram
         CI->>CI: Build Docker image
     end
 
-    rect rgb(255, 248, 240)
+    rect rgba(180, 120, 100, 0.15)
         Note over CI,SCAN: Security Phase
         CI->>SCAN: SAST scan (Semgrep)
         SCAN-->>CI: Findings report
@@ -212,7 +212,7 @@ sequenceDiagram
         Dev->>GH: Merge to main
         GH->>CI: Main branch webhook
 
-        rect rgb(240, 255, 240)
+        rect rgba(100, 180, 120, 0.15)
             Note over CI,STG: Staging Deployment
             CI->>REG: Push image (tag: staging)
             CI->>STG: Helm upgrade --set image.tag=staging
@@ -228,7 +228,7 @@ sequenceDiagram
             QA->>GH: Approve release
             GH->>CI: Release webhook
 
-            rect rgb(240, 255, 240)
+            rect rgba(100, 180, 120, 0.15)
                 Note over CI,PROD: Production Deployment
                 CI->>REG: Push image (tag: v1.2.3)
                 CI->>PROD: Helm upgrade (canary 10%)

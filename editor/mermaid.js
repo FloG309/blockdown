@@ -23,11 +23,13 @@ async function processMermaidBlocks(container) {
         const pre = code.parentElement;
         const source = code.textContent.trim();
         const id = 'mermaid-graph-' + (mermaidCounter++);
+        // Capture pre height before async render to prevent layout shift
+        const preHeight = pre.offsetHeight;
         try {
             const { svg } = await mermaid.render(id, source);
             // Check selection AFTER await — selectInsertedNodes may have run during the yield
             const wasSelected = pre.classList.contains('selected');
-            const mermaidContainer = createMermaidContainer(svg, source);
+            const mermaidContainer = createMermaidContainer(svg, source, preHeight);
             pre.parentNode.replaceChild(mermaidContainer, pre);
 
             // Preserve selection state across the replacement
@@ -51,10 +53,14 @@ async function processMermaidBlocks(container) {
     }
 }
 
-function createMermaidContainer(svgString, source) {
+function createMermaidContainer(svgString, source, minHeight) {
     const container = document.createElement('div');
     container.className = 'mermaid-container';
     container.setAttribute('data-mermaid-source', source);
+    // Set min-height from the previous element to prevent layout shift during load
+    if (minHeight && minHeight > 0) {
+        container.style.minHeight = minHeight + 'px';
+    }
 
     // Viewport (clipping area)
     const viewport = document.createElement('div');
@@ -172,6 +178,7 @@ function autoFitContainer(container) {
 
     container.style.width = containerW + 'px';
     container.style.height = containerH + 'px';
+    container.style.minHeight = '';
 
     // Compute a scale that fits the full diagram inside the container, then center
     fitDiagramInView(container);
@@ -302,16 +309,22 @@ function setupZoomPan(container) {
         isPanning = false;
         viewport.style.cursor = '';
 
-        // Short click with no drag → select the block
+        // Short click with no drag → toggle selection
         if (!hasMoved) {
             const focused = document.activeElement;
             if (focused && focused.tagName === 'TEXTAREA') {
                 focused.blur();
             }
+            const wasSelected = container.classList.contains('selected');
+            const selectedCount = document.querySelectorAll('.selected').length;
             deselectAll();
-            container.classList.add('selected');
-            const idx = parseInt(container.getAttribute('data-index'));
-            if (!isNaN(idx)) currentSelectedIndex = idx;
+            if (wasSelected && selectedCount === 1) {
+                currentSelectedIndex = -1;
+            } else {
+                container.classList.add('selected');
+                const idx = parseInt(container.getAttribute('data-index'));
+                if (!isNaN(idx)) currentSelectedIndex = idx;
+            }
         }
     };
 
