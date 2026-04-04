@@ -857,6 +857,11 @@ textarea:focus {
   color: #fff;
 }
 
+[data-theme="dark"] .settings-seg button.active {
+  background-color: rgba(137, 180, 250, 0.18);
+  color: var(--accent-color);
+}
+
 /* Slider row: label on left, slider center, value on right */
 .settings-slider-row {
   display: flex;
