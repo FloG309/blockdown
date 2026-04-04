@@ -360,6 +360,11 @@ function setupSelectionHandlers() {
         el.addEventListener('click', function(e) {
             e.stopPropagation();
 
+            // Ignore clicks from inside an active editor (CM or textarea in focus)
+            if (e.target.closest && e.target.closest('.cm-editor')) return;
+            if (this.classList.contains('cm-wrapper') && this._cmView &&
+                this._cmView.hasFocus) return;
+
             if (this.tagName === 'TEXTAREA') {
                 deselectAll();
                 // Clicking a textarea re-focuses it — focus/blur handlers manage .selected

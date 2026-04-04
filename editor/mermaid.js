@@ -107,6 +107,8 @@ async function processMermaidBlocks(container) {
         if (!element.parentNode) continue;
 
         const id = 'mermaid-graph-' + (mermaidCounter++);
+        // Capture placeholder height to prevent layout shift when replacing
+        const placeholderHeight = element.offsetHeight;
         try {
             // Wait until the user stops scrolling before starting the next
             // heavy render — this keeps scrolling smooth between diagrams.
@@ -114,7 +116,7 @@ async function processMermaidBlocks(container) {
             // but we can avoid starting the next one while the user scrolls.
             await waitForScrollIdle();
             const { svg } = await mermaid.render(id, source);
-            const mermaidContainer = createMermaidContainer(svg, source);
+            const mermaidContainer = createMermaidContainer(svg, source, placeholderHeight);
 
             // Re-check selection — it may have changed during the await
             const isSelected = element.classList.contains('selected');
@@ -153,10 +155,14 @@ async function processMermaidBlocks(container) {
     container.setAttribute('data-mermaid-ready', 'true');
 }
 
-function createMermaidContainer(svgString, source) {
+function createMermaidContainer(svgString, source, minHeight) {
     const container = document.createElement('div');
     container.className = 'mermaid-container';
     container.setAttribute('data-mermaid-source', source);
+    // Set min-height from the previous element to prevent layout shift during load
+    if (minHeight && minHeight > 0) {
+        container.style.minHeight = minHeight + 'px';
+    }
 
     // Viewport (clipping area)
     const viewport = document.createElement('div');
@@ -274,6 +280,7 @@ function autoFitContainer(container) {
 
     container.style.width = containerW + 'px';
     container.style.height = containerH + 'px';
+    container.style.minHeight = '';
 
     // Compute a scale that fits the full diagram inside the container, then center
     fitDiagramInView(container);
@@ -406,16 +413,22 @@ function setupZoomPan(container) {
         isPanning = false;
         viewport.style.cursor = '';
 
-        // Short click with no drag → select the block
+        // Short click with no drag → toggle selection
         if (!hasMoved) {
             const focused = document.activeElement;
             if (focused && focused.tagName === 'TEXTAREA') {
                 focused.blur();
             }
+            const wasSelected = container.classList.contains('selected');
+            const selectedCount = document.querySelectorAll('.selected').length;
             deselectAll();
-            container.classList.add('selected');
-            const idx = parseInt(container.getAttribute('data-index'));
-            if (!isNaN(idx)) currentSelectedIndex = idx;
+            if (wasSelected && selectedCount === 1) {
+                currentSelectedIndex = -1;
+            } else {
+                container.classList.add('selected');
+                const idx = parseInt(container.getAttribute('data-index'));
+                if (!isNaN(idx)) currentSelectedIndex = idx;
+            }
         }
     };
 

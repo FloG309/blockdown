@@ -114,6 +114,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
 
+    // Click on empty space (outside any block) → deselect all and blur editors
+    document.getElementById('preview-container').addEventListener('click', function(e) {
+        // Only act if the click landed directly on the container or #preview background
+        // Skip if a rubber band drag just finished (it handles its own selection)
+        if (window._rubberBandJustFinished) return;
+        if (e.target === this || e.target === preview || e.target.id === 'settings-anchor') {
+            deselectAll();
+            currentSelectedIndex = -1;
+            // Blur any active editor
+            const focused = document.activeElement;
+            if (focused && (focused.tagName === 'TEXTAREA' || focused.closest('.cm-editor'))) {
+                focused.blur();
+            }
+            // Also blur any CM editors that might be open
+            const cmWrappers = preview.querySelectorAll('.cm-wrapper');
+            cmWrappers.forEach(w => {
+                if (w._cmView) w._cmView.contentDOM.blur();
+                w.classList.remove('selected');
+            });
+        }
+    });
+
     // Handle keyboard navigation for marking several cells (shift + arrow)
     let lastKey = null;
     let lastKeyTime = 0;
