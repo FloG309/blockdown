@@ -60,11 +60,31 @@
 
     // Re-initialize mermaid with matching theme and re-render diagrams
     if (typeof mermaid !== 'undefined') {
-      mermaid.initialize({
+      const mermaidConfig = {
         startOnLoad: false,
-        theme: isDark ? 'dark' : 'default',
         securityLevel: 'loose',
-      });
+      };
+      if (isDark) {
+        mermaidConfig.theme = 'base';
+        mermaidConfig.themeVariables = {
+          background: '#1e1e2e',
+          primaryColor: '#313244',
+          primaryTextColor: '#cdd6f4',
+          primaryBorderColor: '#585b70',
+          secondaryColor: '#45475a',
+          tertiaryColor: '#3b3d54',
+          lineColor: '#a6adc8',
+          textColor: '#cdd6f4',
+          mainBkg: '#313244',
+          nodeBorder: '#585b70',
+          clusterBkg: '#2a2a3e',
+          edgeLabelBackground: '#313244',
+          fontFamily: 'system-ui, sans-serif',
+        };
+      } else {
+        mermaidConfig.theme = 'default';
+      }
+      mermaid.initialize(mermaidConfig);
       reRenderMermaidBlocks(isDark);
     }
   }
