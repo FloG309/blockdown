@@ -45,6 +45,112 @@
 
   // ── Apply settings to the page ─────────────────────────
 
+  // Shared mermaid dark theme variables — used by both settings.js and mermaid.js
+  function getMermaidDarkVars() {
+    return {
+      // General
+      background: '#1e1e2e',
+      fontFamily: 'system-ui, sans-serif',
+      primaryColor: '#313244',
+      primaryTextColor: '#cdd6f4',
+      primaryBorderColor: '#585b70',
+      secondaryColor: '#45475a',
+      secondaryTextColor: '#cdd6f4',
+      secondaryBorderColor: '#585b70',
+      tertiaryColor: '#3b3d54',
+      tertiaryTextColor: '#cdd6f4',
+      tertiaryBorderColor: '#585b70',
+      lineColor: '#a6adc8',
+      textColor: '#cdd6f4',
+      mainBkg: '#313244',
+      nodeBorder: '#585b70',
+      nodeTextColor: '#cdd6f4',
+      // Flowchart
+      clusterBkg: '#252537',
+      clusterBorder: '#45475a',
+      edgeLabelBackground: '#313244',
+      // Sequence diagram
+      actorBkg: '#313244',
+      actorBorder: '#585b70',
+      actorTextColor: '#cdd6f4',
+      actorLineColor: '#a6adc8',
+      signalColor: '#cdd6f4',
+      signalTextColor: '#cdd6f4',
+      labelBoxBkgColor: '#313244',
+      labelBoxBorderColor: '#585b70',
+      labelTextColor: '#cdd6f4',
+      loopTextColor: '#cdd6f4',
+      activationBkgColor: '#45475a',
+      activationBorderColor: '#585b70',
+      sequenceNumberColor: '#1e1e2e',
+      noteBkgColor: '#45475a',
+      noteBorderColor: '#585b70',
+      noteTextColor: '#cdd6f4',
+      // State diagram
+      labelColor: '#cdd6f4',
+      altBackground: '#252537',
+      fillType0: '#313244',
+      fillType1: '#45475a',
+      fillType2: '#3b3d54',
+      fillType3: '#313244',
+      fillType4: '#45475a',
+      fillType5: '#3b3d54',
+      fillType6: '#313244',
+      fillType7: '#45475a',
+      // ER diagram
+      attributeBackgroundColorOdd: '#313244',
+      attributeBackgroundColorEven: '#2a2a3e',
+      // Pie chart
+      pie1: '#89b4fa',
+      pie2: '#a6e3a1',
+      pie3: '#fab387',
+      pie4: '#f38ba8',
+      pie5: '#cba6f7',
+      pie6: '#94e2d5',
+      pie7: '#f9e2af',
+      pie8: '#89dceb',
+      pieStrokeColor: '#45475a',
+      pieSectionTextColor: '#1e1e2e',
+      pieLegendTextColor: '#cdd6f4',
+      pieStrokeWidth: '1px',
+      pieOuterStrokeColor: '#45475a',
+      pieOuterStrokeWidth: '1px',
+      pieTitleTextColor: '#cdd6f4',
+      // Gantt
+      gridColor: '#45475a',
+      doneTaskBkgColor: '#45475a',
+      doneTaskBorderColor: '#585b70',
+      activeTaskBkgColor: '#89b4fa',
+      activeTaskBorderColor: '#585b70',
+      taskBkgColor: '#313244',
+      taskBorderColor: '#585b70',
+      taskTextColor: '#cdd6f4',
+      taskTextLightColor: '#cdd6f4',
+      sectionBkgColor: '#252537',
+      sectionBkgColor2: '#2a2a3e',
+      todayLineColor: '#f38ba8',
+      // Class diagram
+      classText: '#cdd6f4',
+      // Git graph
+      git0: '#89b4fa',
+      git1: '#a6e3a1',
+      git2: '#fab387',
+      git3: '#f38ba8',
+      git4: '#cba6f7',
+      git5: '#94e2d5',
+      git6: '#f9e2af',
+      git7: '#89dceb',
+      gitBranchLabel0: '#1e1e2e',
+      gitBranchLabel1: '#1e1e2e',
+      gitBranchLabel2: '#1e1e2e',
+      gitBranchLabel3: '#1e1e2e',
+      gitInv0: '#89b4fa',
+    };
+  }
+
+  // Expose for mermaid.js initial load
+  window._getMermaidDarkVars = getMermaidDarkVars;
+
   function applyTheme(theme) {
     const html = document.documentElement;
     html.setAttribute('data-theme', theme);
@@ -66,21 +172,7 @@
       };
       if (isDark) {
         mermaidConfig.theme = 'base';
-        mermaidConfig.themeVariables = {
-          background: '#1e1e2e',
-          primaryColor: '#313244',
-          primaryTextColor: '#cdd6f4',
-          primaryBorderColor: '#585b70',
-          secondaryColor: '#45475a',
-          tertiaryColor: '#3b3d54',
-          lineColor: '#a6adc8',
-          textColor: '#cdd6f4',
-          mainBkg: '#313244',
-          nodeBorder: '#585b70',
-          clusterBkg: '#2a2a3e',
-          edgeLabelBackground: '#313244',
-          fontFamily: 'system-ui, sans-serif',
-        };
+        mermaidConfig.themeVariables = getMermaidDarkVars();
       } else {
         mermaidConfig.theme = 'default';
       }
