@@ -116,7 +116,11 @@ async function processMermaidBlocks(container) {
             // but we can avoid starting the next one while the user scrolls.
             await waitForScrollIdle();
             const { svg } = await mermaid.render(id, source);
-            const mermaidContainer = createMermaidContainer(svg, source, placeholderHeight);
+            const mermaidContainer = createMermaidContainer(svg, source);
+
+            // Fade in: start invisible, appear smoothly after auto-fit sets the real size
+            mermaidContainer.style.opacity = '0';
+            mermaidContainer.style.transition = 'opacity 0.4s ease';
 
             // Re-check selection — it may have changed during the await
             const isSelected = element.classList.contains('selected');
@@ -126,8 +130,16 @@ async function processMermaidBlocks(container) {
                 mermaidContainer.classList.add('selected');
             }
 
-            // Yield so the browser paints each diagram as it completes
+            // Yield so the browser paints and autoFitContainer sets the correct size
             await new Promise(r => requestAnimationFrame(r));
+
+            // Fade in after auto-fit has set the correct dimensions
+            requestAnimationFrame(() => {
+                mermaidContainer.style.opacity = '1';
+                setTimeout(() => {
+                    mermaidContainer.style.transition = '';
+                }, 450);
+            });
         } catch (err) {
             console.error('Mermaid render error:', err);
             // Show error state instead of perpetual spinner
@@ -155,14 +167,10 @@ async function processMermaidBlocks(container) {
     container.setAttribute('data-mermaid-ready', 'true');
 }
 
-function createMermaidContainer(svgString, source, minHeight) {
+function createMermaidContainer(svgString, source) {
     const container = document.createElement('div');
     container.className = 'mermaid-container';
     container.setAttribute('data-mermaid-source', source);
-    // Set min-height from the previous element to prevent layout shift during load
-    if (minHeight && minHeight > 0) {
-        container.style.minHeight = minHeight + 'px';
-    }
 
     // Viewport (clipping area)
     const viewport = document.createElement('div');
@@ -280,7 +288,6 @@ function autoFitContainer(container) {
 
     container.style.width = containerW + 'px';
     container.style.height = containerH + 'px';
-    container.style.minHeight = '';
 
     // Compute a scale that fits the full diagram inside the container, then center
     fitDiagramInView(container);
@@ -299,7 +306,7 @@ function fitDiagramInView(container) {
 
     // Scale so the diagram fills ~95% of the viewport (tight fit, almost touching edges)
     const margin = 0.95;
-    const fitScale = Math.min((vw * margin) / nat.w, (vh * margin) / nat.h, 1);
+    const fitScale = Math.min((vw * margin) / nat.w, (vh * margin) / nat.h);
 
     // Store per-container minimum scale so zoom-out can always return to fitted size
     container._minScale = Math.min(fitScale, 0.25);

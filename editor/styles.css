@@ -518,31 +518,31 @@ textarea:focus {
     justify-content: center;
     gap: 12px;
     min-height: 150px;
-    border: 1px dashed #d1d5db;
+    border: 1px dashed var(--border-mermaid);
     border-radius: 6px;
-    margin-bottom: 1rem;
-    background-color: #fafafa;
+    margin-bottom: var(--paragraph-spacing);
+    background-color: var(--bg-mermaid);
     transition: background-color 0.2s ease, border-color 0.2s ease;
     cursor: pointer;
 }
 
 .mermaid-placeholder.selected {
-    background-color: #e1f0ff;
-    border-color: #2b77d9;
+    background-color: var(--selection-bg);
+    border-color: var(--accent-color);
 }
 
 .mermaid-placeholder-spinner {
     width: 28px;
     height: 28px;
-    border: 3px solid #d1d5db;
-    border-top-color: #2b77d9;
+    border: 3px solid var(--border-mermaid);
+    border-top-color: var(--accent-color);
     border-radius: 50%;
     animation: mermaid-spin 0.8s linear infinite;
 }
 
 .mermaid-placeholder-label {
     font-size: 0.85rem;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-family: system-ui, -apple-system, sans-serif;
 }
 

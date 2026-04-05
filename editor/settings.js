@@ -200,9 +200,17 @@
         if (container._onMouseMove) document.removeEventListener('mousemove', container._onMouseMove);
         if (container._onMouseUp) document.removeEventListener('mouseup', container._onMouseUp);
 
-        // Replace with new container, using old height to prevent layout shift
+        // Replace with new container, animate from old height to prevent layout shift
         const oldHeight = container.offsetHeight;
-        const newContainer = createMermaidContainer(svg, source, oldHeight);
+        const newContainer = createMermaidContainer(svg, source);
+        newContainer.style.opacity = '0';
+        newContainer.style.transition = 'opacity 0.4s ease';
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            newContainer.style.opacity = '1';
+            setTimeout(() => { newContainer.style.transition = ''; }, 450);
+          });
+        });
         container.parentNode.replaceChild(newContainer, container);
         if (wasSelected) newContainer.classList.add('selected');
       } catch (err) {
