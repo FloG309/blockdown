@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Write Test — Diverse Markdown</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" id="hljs-theme" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    <script src="https://unpkg.com/turndown/dist/turndown.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- CodeMirror 6 bundle (pre-built IIFE, sets window.CM) -->
+    <script src="codemirrorBundle.js"></script>
+    <script src="undo.js"></script>
+    <script src="mermaid.js"></script>
+    <script src="events.js"></script>
+    <script src="rubberband.js"></script>
+    <script src="settings.js"></script>
+    <!-- Custom markdown content (must load before base.js) -->
+    <script src="test-write-content.js"></script>
+    <script src="base.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div id="preview-container">
+            <div id="preview">
+                <!-- Settings anchor: sticky, zero-height, holds gear + popover -->
+                <div id="settings-anchor">
+                    <button id="settings-btn" title="Layout settings" aria-label="Layout settings">&#9881;</button>
+                    <div id="settings-popover" class="settings-popover hidden">
+                        <div class="settings-group">
+                            <label>Theme</label>
+                            <div class="settings-seg" data-setting="theme">
+                                <button data-value="light" title="Light">&#9788;</button>
+                                <button data-value="dark" title="Dark">&#9790;</button>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <label>Font Size</label>
+                            <div class="settings-seg" data-setting="fontSize">
+                                <button data-value="14">S</button>
+                                <button data-value="16">M</button>
+                                <button data-value="18">L</button>
+                                <button data-value="20">XL</button>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <label>Line Height</label>
+                            <div class="settings-slider-row">
+                                <input type="range" data-setting="lineHeight" min="1.0" max="2.0" step="0.1" value="1.6">
+                                <span class="settings-slider-value" data-display="lineHeight">1.6</span>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <label>Spacing</label>
+                            <div class="settings-slider-row">
+                                <input type="range" data-setting="paragraphSpacing" min="0" max="2.0" step="0.25" value="1">
+                                <span class="settings-slider-value" data-display="paragraphSpacing">1rem</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <p>Loading test data...</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

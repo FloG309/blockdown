@@ -339,6 +339,134 @@ function findClosestSelectableParent(element) {
     return null;
 }
 
+// ── Selection Overlay ────────────────────────────────────
+// Draws a single fused bounding box around each group of adjacent selected blocks.
+// A MutationObserver watches for .selected class changes and triggers updates.
+
+let _overlayUpdateScheduled = false;
+let _selectionObserver = null;
+
+function scheduleOverlayUpdate() {
+    if (!_overlayUpdateScheduled) {
+        _overlayUpdateScheduled = true;
+        requestAnimationFrame(() => {
+            _overlayUpdateScheduled = false;
+            updateSelectionOverlay();
+        });
+    }
+}
+
+function updateSelectionOverlay() {
+    const preview = document.getElementById('preview');
+
+    // Get or create overlay container
+    let container = document.getElementById('selection-overlay-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'selection-overlay-container';
+        preview.appendChild(container);
+    }
+
+    // Clear existing overlays
+    container.innerHTML = '';
+
+    // Find contiguous groups of selected elements
+    const groups = [];
+    let currentGroup = [];
+
+    for (const el of selectableElements) {
+        if (el.classList.contains('selected')) {
+            currentGroup.push(el);
+        } else {
+            if (currentGroup.length > 0) {
+                groups.push(currentGroup);
+                currentGroup = [];
+            }
+        }
+    }
+    if (currentGroup.length > 0) {
+        groups.push(currentGroup);
+    }
+
+    // Create an overlay div for each group
+    for (const group of groups) {
+        const first = group[0];
+        const last = group[group.length - 1];
+
+        const top = first.offsetTop;
+        const bottom = last.offsetTop + last.offsetHeight;
+
+        // Find widest extent across the group
+        let left = Infinity, right = -Infinity;
+        for (const el of group) {
+            left = Math.min(left, el.offsetLeft);
+            right = Math.max(right, el.offsetLeft + el.offsetWidth);
+        }
+
+        const overlay = document.createElement('div');
+        overlay.className = 'selection-overlay';
+        overlay.style.top = top + 'px';
+        overlay.style.left = left + 'px';
+        overlay.style.width = (right - left) + 'px';
+        overlay.style.height = (bottom - top) + 'px';
+
+        container.appendChild(overlay);
+    }
+}
+
+// Ensure native text selection stays within selected boxes.
+// If the selection's focus or anchor crossed into a non-selected block, add that block.
+function ensureTextSelectionWithinBoxes() {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const preview = document.getElementById('preview');
+    const nodes = [sel.focusNode, sel.anchorNode];
+
+    for (const textNode of nodes) {
+        if (!textNode) continue;
+        // Walk up to find the direct child of #preview that contains this node
+        let block = textNode;
+        while (block && block.parentElement !== preview) {
+            block = block.parentElement;
+        }
+        if (!block || block === preview) continue;
+
+        // If this block isn't selected, add it
+        if (!block.classList.contains('selected')) {
+            block.classList.add('selected');
+            const idx = parseInt(block.getAttribute('data-index'));
+            if (!isNaN(idx)) currentSelectedIndex = idx;
+        }
+    }
+}
+
+// Scroll the text selection's focus point into view within #preview-container
+function scrollSelectionFocusIntoView() {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    // Get the bounding rect of the focus end of the selection
+    const range = sel.getRangeAt(0);
+    const focusRange = document.createRange();
+    focusRange.setStart(sel.focusNode, sel.focusOffset);
+    focusRange.collapse(true);
+
+    const rect = focusRange.getBoundingClientRect();
+    if (!rect || (rect.top === 0 && rect.bottom === 0)) return;
+
+    const container = document.getElementById('preview-container');
+    if (!container) return;
+    const containerRect = container.getBoundingClientRect();
+
+    // Scroll if the focus is outside the visible area
+    if (rect.bottom > containerRect.bottom) {
+        container.scrollTop += rect.bottom - containerRect.bottom + 20;
+    } else if (rect.top < containerRect.top) {
+        container.scrollTop -= containerRect.top - rect.top + 20;
+    }
+}
+
 // Deselect all elements (blurred textareas keep .selected for multi-edit visibility)
 function deselectAll() {
     selectableElements.forEach(el => {
@@ -364,6 +492,16 @@ function setupSelectionHandlers() {
             if (e.target.closest && e.target.closest('.cm-editor')) return;
             if (this.classList.contains('cm-wrapper') && this._cmView &&
                 this._cmView.hasFocus) return;
+
+            // Double-click: keep box selected, let browser handle native word selection
+            if (e.detail >= 2) {
+                if (!this.classList.contains('selected')) {
+                    deselectAll();
+                    this.classList.add('selected');
+                }
+                currentSelectedIndex = parseInt(this.getAttribute('data-index'));
+                return;
+            }
 
             if (this.tagName === 'TEXTAREA') {
                 deselectAll();
@@ -401,6 +539,21 @@ function setupSelectionHandlers() {
     });
 
     currentSelectedIndex = -1;
+
+    // Re-observe elements for selection overlay updates
+    if (_selectionObserver) _selectionObserver.disconnect();
+    _selectionObserver = new MutationObserver(() => scheduleOverlayUpdate());
+    selectableElements.forEach(el => {
+        _selectionObserver.observe(el, { attributes: true, attributeFilter: ['class'] });
+    });
+
+    // Recalculate overlay on window resize (layout reflow)
+    if (!setupSelectionHandlers._resizeBound) {
+        setupSelectionHandlers._resizeBound = true;
+        window.addEventListener('resize', () => scheduleOverlayUpdate());
+    }
+
+    scheduleOverlayUpdate();
 }
 
 // Toggle selection state of an element
@@ -427,7 +580,7 @@ function handleArrowUp(e) {
     targetElement.classList.add('selected');
     currentSelectedIndex = newIndex;
 
-    targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    targetElement.scrollIntoView({ behavior: 'auto', block: 'nearest' });
 }
 
 function handleArrowDown(e) {
@@ -444,7 +597,7 @@ function handleArrowDown(e) {
     targetElement.classList.add('selected');
     currentSelectedIndex = newIndex;
 
-    targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    targetElement.scrollIntoView({ behavior: 'auto', block: 'nearest' });
 }
 
 function handleShiftArrowUp(e) {
@@ -466,7 +619,7 @@ function handleShiftArrowUp(e) {
     }
     currentSelectedIndex = newIndex;
 
-    targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    targetElement.scrollIntoView({ behavior: 'auto', block: 'nearest' });
 }
 
 function handleShiftArrowDown(e) {
@@ -488,7 +641,7 @@ function handleShiftArrowDown(e) {
     }
     currentSelectedIndex = newIndex;
 
-    targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    targetElement.scrollIntoView({ behavior: 'auto', block: 'nearest' });
 }
 
 function handleShiftEnter(e) {

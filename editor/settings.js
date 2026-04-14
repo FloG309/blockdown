@@ -246,6 +246,8 @@
         root.setProperty('--content-width', value + '%');
         break;
     }
+    // Layout changed — recalculate selection overlay positions
+    if (typeof scheduleOverlayUpdate === 'function') scheduleOverlayUpdate();
   }
 
   function applyAllSettings(settings) {

@@ -1731,3 +1731,574 @@ test.describe('Feature 11: Layout Menu & Dark Mode', () => {
   });
 });
 
+// =============================================================
+// Helper: wait for test-write.html editor to initialize
+// =============================================================
+
+async function waitForTestWriteEditor(page) {
+  await page.goto('/editor/test-write.html');
+  await page.waitForSelector('#preview h1');
+  await page.waitForFunction(() => window.CM && window.CM.ready, { timeout: 5000 });
+}
+
+// =============================================================
+// Feature: Selection styling — fused bounding box overlay
+// =============================================================
+
+test.describe('Selection overlay', () => {
+
+  test('selecting two adjacent blocks creates overlay spanning both', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the first block
+    await pressKey(page, 'ArrowDown');
+    await expect(page.locator('#preview .selected')).toHaveCount(1);
+
+    // Extend selection to include the second block
+    await page.keyboard.press('Shift+ArrowDown');
+    await expect(page.locator('#preview .selected')).toHaveCount(2);
+
+    // Overlay container should exist with at least one overlay child
+    const overlayCount = await page.locator('#selection-overlay-container .selection-overlay').count();
+    expect(overlayCount).toBeGreaterThanOrEqual(1);
+
+    // Since the two blocks are adjacent, there should be exactly 1 overlay
+    expect(overlayCount).toBe(1);
+  });
+
+  test('overlay appears on select and disappears on Escape', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select a block
+    await pressKey(page, 'ArrowDown');
+    await expect(page.locator('#preview .selected')).toHaveCount(1);
+
+    // Wait for overlay to render (uses requestAnimationFrame)
+    await page.waitForFunction(() =>
+      document.querySelectorAll('#selection-overlay-container .selection-overlay').length > 0,
+      { timeout: 2000 }
+    );
+    const overlayCount = await page.locator('#selection-overlay-container .selection-overlay').count();
+    expect(overlayCount).toBe(1);
+
+    // Deselect with Escape
+    await pressKey(page, 'Escape');
+    await expect(page.locator('#preview .selected')).toHaveCount(0);
+
+    // Wait for overlay to clear
+    await page.waitForFunction(() =>
+      document.querySelectorAll('#selection-overlay-container .selection-overlay').length === 0,
+      { timeout: 2000 }
+    );
+    const afterCount = await page.locator('#selection-overlay-container .selection-overlay').count();
+    expect(afterCount).toBe(0);
+  });
+
+  test('non-adjacent selected blocks produce separate overlays', async ({ page }) => {
+    await waitForTestWriteEditor(page);
+
+    // Select block 0
+    await pressKey(page, 'ArrowDown');
+
+    // Select blocks 0 and 2 (skip block 1) using click with Ctrl
+    const blocks = await getBlocks(page);
+    const block0 = blocks.nth(0);
+    const block2 = blocks.nth(2);
+
+    await block0.click();
+    await block2.click({ modifiers: ['Shift'] });
+
+    // We need non-adjacent selection. Let's do it differently:
+    // Select block 0, then Ctrl+click block 2
+    // Actually, Ctrl+click may toggle. Let's use the keyboard approach.
+    // Select block 0, ArrowDown twice to get to block 2, then we need to select 0 and 2 only.
+    // The app might not support Ctrl+click for multi-select. Let's select 0 and 2 via evaluate.
+
+    await page.evaluate(() => {
+      deselectAll();
+      selectableElements[0].classList.add('selected');
+      selectableElements[2].classList.add('selected');
+      currentSelectedIndex = 2;
+      // Trigger overlay update
+      if (typeof scheduleOverlayUpdate === 'function') scheduleOverlayUpdate();
+      else if (typeof updateSelectionOverlay === 'function') updateSelectionOverlay();
+    });
+
+    // Wait a frame for overlay to update
+    await page.waitForTimeout(100);
+
+    const overlayCount = await page.locator('#selection-overlay-container .selection-overlay').count();
+    expect(overlayCount).toBe(2);
+  });
+});
+
+// =============================================================
+// Feature: Rubber band starts outside preview area
+// =============================================================
+
+test.describe('Rubber band from outside preview', () => {
+
+  test('drag starting outside #preview on #preview-container selects blocks', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Get the preview-container and the first block's bounding rect
+    const containerBox = await page.locator('#preview-container').boundingBox();
+    const blocks = await getBlocks(page);
+    const firstBlockBox = await blocks.first().boundingBox();
+    const secondBlockBox = await blocks.nth(1).boundingBox();
+
+    // Start the drag from the far left of preview-container (outside #preview content)
+    const startX = containerBox.x + 5;
+    const startY = firstBlockBox.y + 5;
+
+    // End the drag across the first two blocks on the right side
+    const endX = containerBox.x + containerBox.width - 10;
+    const endY = secondBlockBox.y + secondBlockBox.height - 5;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(endX, endY, { steps: 10 });
+    await page.mouse.up();
+
+    // Blocks should be selected
+    const selectedCount = await page.locator('#preview .selected').count();
+    expect(selectedCount).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// =============================================================
+// Feature: Ctrl+A selects all blocks
+// =============================================================
+
+test.describe('Ctrl+A selects all blocks', () => {
+
+  test('Ctrl+A selects all selectable blocks', async ({ page }) => {
+    await waitForEditor(page);
+
+    // First select a block to be in block mode
+    await pressKey(page, 'ArrowDown');
+
+    // Press Ctrl+A
+    await page.keyboard.press('Control+a');
+
+    // All selectable blocks should have .selected class
+    const totalBlocks = await page.evaluate(() => selectableElements.length);
+    const selectedCount = await page.locator('#preview .selected').count();
+    expect(selectedCount).toBe(totalBlocks);
+    expect(selectedCount).toBeGreaterThan(1);
+  });
+
+  test('selection overlay exists after Ctrl+A', async ({ page }) => {
+    await waitForEditor(page);
+
+    await pressKey(page, 'ArrowDown');
+    await page.keyboard.press('Control+a');
+
+    const overlayCount = await page.locator('#selection-overlay-container .selection-overlay').count();
+    expect(overlayCount).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// =============================================================
+// Feature: Ctrl+C copies text to system clipboard
+// =============================================================
+
+test.describe('Ctrl+C copies to clipboard', () => {
+
+  test('Ctrl+C copies selected block text to clipboard', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await waitForEditor(page);
+
+    // Select the first block
+    await pressKey(page, 'ArrowDown');
+    const blocks = await getBlocks(page);
+    const blockText = await blocks.first().textContent();
+
+    // Press Ctrl+C
+    await page.keyboard.press('Control+c');
+
+    // Read clipboard
+    const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboardText).toBe(blockText);
+  });
+});
+
+// =============================================================
+// Feature: Ctrl+V pastes text from clipboard as new blocks
+// =============================================================
+
+test.describe('Ctrl+V pastes from clipboard', () => {
+
+  test('Ctrl+V pastes clipboard text as a new block', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await waitForEditor(page);
+
+    const blocksBefore = await (await getBlocks(page)).count();
+
+    // Write text to clipboard
+    await page.evaluate(() => navigator.clipboard.writeText('pasted paragraph'));
+
+    // Select a block
+    await pressKey(page, 'ArrowDown');
+
+    // Press Ctrl+V
+    await page.keyboard.press('Control+v');
+
+    // Wait for the paste to take effect
+    await page.waitForTimeout(200);
+
+    // A new block should have appeared
+    const blocksAfter = await (await getBlocks(page)).count();
+    expect(blocksAfter).toBeGreaterThan(blocksBefore);
+
+    // The new block should contain the pasted text
+    const pastedBlock = page.locator('#preview .selected');
+    const pastedText = await pastedBlock.first().textContent();
+    expect(pastedText).toContain('pasted paragraph');
+  });
+});
+
+// =============================================================
+// Feature: Block copy/paste with c/v keys still works
+// =============================================================
+
+test.describe('Block copy/paste with c/v keys', () => {
+
+  test('c copies block and v pastes it', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the first block
+    await pressKey(page, 'ArrowDown');
+    const blocks = await getBlocks(page);
+    const originalText = await blocks.first().textContent();
+    const blocksBefore = await blocks.count();
+
+    // Press c to copy the block
+    await pressKey(page, 'c');
+
+    // Move down
+    await pressKey(page, 'ArrowDown');
+
+    // Press v to paste
+    await pressKey(page, 'v');
+
+    // Wait for paste to take effect
+    await page.waitForTimeout(200);
+
+    // Block count should have increased
+    const blocksAfter = await (await getBlocks(page)).count();
+    expect(blocksAfter).toBeGreaterThan(blocksBefore);
+
+    // The pasted block should contain the same text as the original
+    const selectedBlock = page.locator('#preview .selected');
+    const pastedText = await selectedBlock.first().textContent();
+    expect(pastedText).toBe(originalText);
+  });
+});
+
+// =============================================================
+// Feature: Ctrl+A, Ctrl+C, Ctrl+V do NOT interfere with edit mode
+// =============================================================
+
+test.describe('Ctrl+A/C/V do not interfere with edit mode', () => {
+
+  test('Ctrl+A in edit mode selects editor text, not all blocks', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select the first block and enter edit mode
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'Enter');
+    await waitForEditMode(page);
+
+    // Press Ctrl+A inside the editor
+    await page.keyboard.press('Control+a');
+
+    // The CM editor should still be visible (still in edit mode)
+    await expect(page.locator('#preview .cm-wrapper .cm-editor')).toHaveCount(1);
+
+    // NOT all blocks should be selected — we should still be in edit mode
+    // Only the cm-wrapper block might have .selected, not all blocks
+    const selectedCount = await page.locator('#preview .selected').count();
+    const totalBlocks = await (await getBlocks(page)).count();
+    expect(selectedCount).toBeLessThan(totalBlocks);
+  });
+});
+
+// =============================================================
+// Feature: Scrolling speed — instant scroll
+// =============================================================
+
+test.describe('Scrolling speed — selected block stays visible', () => {
+
+  test('navigating many blocks keeps the selected block in viewport', async ({ page }) => {
+    await waitForTestWriteEditor(page);
+
+    // Select the first block
+    await pressKey(page, 'ArrowDown');
+
+    // Press ArrowDown many times to scroll through blocks
+    for (let i = 0; i < 20; i++) {
+      await pressKey(page, 'ArrowDown');
+    }
+
+    // The selected block should be at least partially visible in the viewport
+    const isVisible = await page.evaluate(() => {
+      const selected = document.querySelector('.selected');
+      if (!selected) return false;
+      const rect = selected.getBoundingClientRect();
+      // At least part of the element is within the viewport
+      return rect.bottom > 0 && rect.top < window.innerHeight;
+    });
+
+    expect(isVisible).toBe(true);
+  });
+});
+
+// =============================================================
+// Feature: Double-click keeps box selected
+// =============================================================
+
+test.describe('Double-click keeps box selected', () => {
+
+  test('double-click on a selected block keeps it selected', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Click a block to select it
+    const blocks = await getBlocks(page);
+    const firstBlock = blocks.first();
+    await firstBlock.click();
+    await expect(firstBlock).toHaveClass(/selected/);
+
+    // Double-click on it
+    await firstBlock.dblclick();
+
+    // Should still be selected
+    await expect(firstBlock).toHaveClass(/selected/);
+  });
+
+  test('double-click on an unselected block selects it', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    const secondBlock = blocks.nth(1);
+
+    // Double-click an unselected block
+    await secondBlock.dblclick();
+
+    // Should become selected
+    await expect(secondBlock).toHaveClass(/selected/);
+  });
+});
+
+// =============================================================
+// Feature: Shift+Right extends text selection word by word
+// =============================================================
+
+test.describe('Shift+Right extends text selection', () => {
+
+  test('Shift+Right selects the first word of the selected block', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select a paragraph block (second block, index 1, which is a paragraph)
+    const blocks = await getBlocks(page);
+    await blocks.nth(1).click();
+    await expect(blocks.nth(1)).toHaveClass(/selected/);
+
+    // Press Ctrl+Right to select the first word
+    await page.keyboard.press('Shift+ArrowRight');
+
+    const selectedText = await page.evaluate(() => window.getSelection().toString());
+    expect(selectedText.length).toBeGreaterThan(0);
+  });
+
+  test('pressing Shift+Right multiple times grows the text selection', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    await blocks.nth(1).click();
+
+    // Select first word
+    await page.keyboard.press('Shift+ArrowRight');
+    const firstLen = await page.evaluate(() => window.getSelection().toString().length);
+    expect(firstLen).toBeGreaterThan(0);
+
+    // Press Ctrl+Right several more times to ensure growth
+    for (let i = 0; i < 3; i++) {
+      await page.keyboard.press('Shift+ArrowRight');
+    }
+    const laterLen = await page.evaluate(() => window.getSelection().toString().length);
+
+    expect(laterLen).toBeGreaterThan(firstLen);
+  });
+
+  test('selected text is within the selected block', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    await blocks.nth(1).click();
+
+    await page.keyboard.press('Shift+ArrowRight');
+
+    const isWithinBlock = await page.evaluate(() => {
+      const sel = window.getSelection();
+      if (!sel.anchorNode) return false;
+      const selectedBlock = document.querySelector('.selected');
+      return selectedBlock && selectedBlock.contains(sel.anchorNode);
+    });
+
+    expect(isWithinBlock).toBe(true);
+  });
+});
+
+// =============================================================
+// Feature: Shift+Left contracts text selection
+// =============================================================
+
+test.describe('Shift+Left contracts text selection', () => {
+
+  test('Shift+Left reduces the text selection after Ctrl+Right', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    await blocks.nth(1).click();
+
+    // Select 3 words forward
+    await page.keyboard.press('Shift+ArrowRight');
+    await page.keyboard.press('Shift+ArrowRight');
+    await page.keyboard.press('Shift+ArrowRight');
+
+    const afterThreeWords = await page.evaluate(() => window.getSelection().toString().length);
+
+    // Contract by one word
+    await page.keyboard.press('Shift+ArrowLeft');
+
+    const afterContraction = await page.evaluate(() => window.getSelection().toString().length);
+
+    expect(afterContraction).toBeLessThan(afterThreeWords);
+  });
+});
+
+// =============================================================
+// Feature: Arrow keys clear text selection
+// =============================================================
+
+test.describe('Arrow keys clear text selection', () => {
+
+  test('ArrowDown clears text selection created by Shift+Right', async ({ page }) => {
+    await waitForEditor(page);
+
+    const blocks = await getBlocks(page);
+    await blocks.nth(1).click();
+
+    // Create a text selection
+    await page.keyboard.press('Shift+ArrowRight');
+
+    const selBefore = await page.evaluate(() => window.getSelection().toString());
+    expect(selBefore.length).toBeGreaterThan(0);
+
+    // Press ArrowDown to navigate
+    await pressKey(page, 'ArrowDown');
+
+    const selAfter = await page.evaluate(() => window.getSelection().toString());
+    expect(selAfter).toBe('');
+  });
+});
+
+// =============================================================
+// Feature: Shift+Right starts from first selected block (multi-select)
+// =============================================================
+
+test.describe('Shift+Right starts from first selected block on multi-select', () => {
+
+  test('text selection starts within the first selected block', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select first block
+    await pressKey(page, 'ArrowDown');
+
+    // Extend to second block
+    await page.keyboard.press('Shift+ArrowDown');
+    await expect(page.locator('#preview .selected')).toHaveCount(2);
+
+    // Press Ctrl+Right
+    await page.keyboard.press('Shift+ArrowRight');
+
+    const isInFirstBlock = await page.evaluate(() => {
+      const sel = window.getSelection();
+      if (!sel.anchorNode) return false;
+      const selectedBlocks = document.querySelectorAll('#preview > .selected');
+      const firstBlock = selectedBlocks[0];
+      return firstBlock && firstBlock.contains(sel.anchorNode);
+    });
+
+    expect(isInFirstBlock).toBe(true);
+  });
+});
+
+// =============================================================
+// Feature: Text selection grows box when reaching boundary
+// =============================================================
+
+test.describe('Text selection grows box at block boundary', () => {
+
+  test('Shift+Right many times grows the box selection beyond one block', async ({ page }) => {
+    await waitForTestWriteEditor(page);
+
+    // Select the first paragraph block (a block with text content)
+    // The first block is h1 "The Blockdown Editor", second is a paragraph
+    const blocks = await getBlocks(page);
+    await blocks.nth(1).click();
+    await expect(blocks.nth(1)).toHaveClass(/selected/);
+
+    const selectedBefore = await page.locator('#preview .selected').count();
+    expect(selectedBefore).toBe(1);
+
+    // Press Ctrl+Right many times to exhaust the text in the first block
+    for (let i = 0; i < 50; i++) {
+      await page.keyboard.press('Shift+ArrowRight');
+    }
+
+    // The box selection should have grown to include more blocks
+    const selectedAfter = await page.locator('#preview .selected').count();
+    expect(selectedAfter).toBeGreaterThan(1);
+  });
+});
+
+// =============================================================
+// Feature: Selection overlay updates on layout settings change
+// =============================================================
+
+test.describe('Selection overlay updates on layout change', () => {
+
+  test('overlay repositions after font size change', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Select two adjacent blocks
+    await pressKey(page, 'ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+    await expect(page.locator('#preview .selected')).toHaveCount(2);
+
+    // Get the overlay height before the change
+    const heightBefore = await page.evaluate(() => {
+      const overlay = document.querySelector('#selection-overlay-container .selection-overlay');
+      return overlay ? overlay.offsetHeight : 0;
+    });
+    expect(heightBefore).toBeGreaterThan(0);
+
+    // Open settings and change font size
+    await page.locator('#settings-btn').click();
+    await page.locator('.settings-seg[data-setting="fontSize"] button[data-value="20"]').click();
+
+    // Wait for overlay to update (requestAnimationFrame + reflow)
+    await page.waitForTimeout(200);
+
+    // Get the overlay height after the change
+    const heightAfter = await page.evaluate(() => {
+      const overlay = document.querySelector('#selection-overlay-container .selection-overlay');
+      return overlay ? overlay.offsetHeight : 0;
+    });
+
+    // The overlay height should have changed due to the font size change
+    expect(heightAfter).not.toBe(heightBefore);
+  });
+});

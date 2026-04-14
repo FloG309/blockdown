@@ -20,6 +20,7 @@
     --border-mermaid: #d1d5db;
     --selection-bg: #e1f0ff;
     --accent-color: #2b77d9;
+    --selection-border: rgba(43, 119, 217, 0.3);
     --link-color: #0366d6;
     --code-bg: #f3f4f6;
     --hr-color: #e5e7eb;
@@ -53,6 +54,7 @@
     --border-mermaid: #45475a;
     --selection-bg: #2a3a5e;
     --accent-color: #89b4fa;
+    --selection-border: rgba(137, 180, 250, 0.3);
     --link-color: #89b4fa;
     --code-bg: #181825;
     --hr-color: #45475a;
@@ -125,6 +127,26 @@ h1 {
     margin: 0 auto;
     padding: 1rem;
     line-height: var(--line-height);
+    -webkit-user-select: text;
+    user-select: text;
+    position: relative;
+}
+
+/* Selection overlay: fused bounding box around groups of selected blocks */
+#selection-overlay-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.selection-overlay {
+    position: absolute;
+    border: 1px solid var(--selection-border);
+    border-radius: 3px;
+    pointer-events: none;
 }
 
 #preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 {
@@ -138,7 +160,7 @@ h1 {
 
 #preview h1.selected, #preview h2.selected, #preview h3.selected,
 #preview h4.selected, #preview h5.selected, #preview h6.selected {
-    background-color: var(--selection-bg);
+    /* outline */
 }
 
 #preview p {
@@ -151,7 +173,7 @@ h1 {
 }
 
 #preview p.selected {
-    background-color: var(--selection-bg);
+    /* outline */
 }
 
 #preview code {
@@ -164,7 +186,7 @@ h1 {
 }
 
 #preview code.selected {
-    background-color: var(--selection-bg);
+    /* outline */
 }
 
 #preview pre {
@@ -179,7 +201,7 @@ h1 {
 }
 
 #preview pre.selected {
-    background-color: var(--selection-bg);
+    /* outline */
 }
 
 #preview pre code {
@@ -206,7 +228,7 @@ h1 {
 }
 
 #preview blockquote.selected {
-    background-color: var(--selection-bg);
+    /* outline */
 }
 
 #preview ul, #preview ol {
@@ -219,7 +241,7 @@ h1 {
 }
 
 #preview ul.selected, #preview ol.selected {
-    background-color: var(--selection-bg);
+    /* outline */
 }
 
 /* Nested lists (sub-lists) should not have extra margin */
@@ -265,7 +287,7 @@ h1 {
 }
 
 #preview table.selected {
-    background-color: var(--selection-bg);
+    /* outline */
 }
 
 #preview th, #preview td {
@@ -276,7 +298,7 @@ h1 {
 }
 
 #preview th.selected, #preview td.selected {
-    background-color: var(--selection-bg);
+    /* outline */
 }
 
 #preview th {
@@ -291,7 +313,7 @@ h1 {
 }
 
 #preview img.selected {
-    background-color: var(--selection-bg);
+    /* outline */
 }
 
 #preview a {
@@ -303,7 +325,7 @@ h1 {
 }
 
 #preview a.selected {
-    background-color: var(--selection-bg);
+    /* outline */
 }
 
 #preview hr {
@@ -316,7 +338,7 @@ h1 {
 }
 
 #preview hr.selected {
-    background-color: var(--selection-bg);
+    /* outline */
     height: 3px;
 }
 
@@ -357,8 +379,7 @@ textarea {
 }
 
 textarea.selected {
-  background-color: var(--selection-bg);
-  border-color: var(--accent-color);
+  /* overlay handles the visual frame */
 }
 
 textarea:focus {
@@ -379,8 +400,7 @@ textarea:focus {
 }
 
 .mermaid-container.selected {
-    background-color: var(--selection-bg);
-    border-color: var(--accent-color);
+    /* overlay handles the visual frame */
 }
 
 .mermaid-viewport {
@@ -503,7 +523,7 @@ textarea:focus {
 }
 
 .mermaid-btn:hover {
-    background-color: var(--selection-bg);
+    /* outline */
     border-color: var(--accent-color);
     color: var(--accent-color);
 }
@@ -527,8 +547,7 @@ textarea:focus {
 }
 
 .mermaid-placeholder.selected {
-    background-color: var(--selection-bg);
-    border-color: var(--accent-color);
+    /* overlay handles the visual frame */
 }
 
 .mermaid-placeholder-spinner {
@@ -573,8 +592,7 @@ textarea:focus {
 }
 
 .cm-wrapper.selected > .cm-editor {
-  border-color: var(--accent-color);
-  background-color: var(--selection-bg);
+  /* overlay handles the visual frame */
 }
 
 /* CodeMirror line decoration classes */

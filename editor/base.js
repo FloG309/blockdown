@@ -210,6 +210,152 @@ document.addEventListener('DOMContentLoaded', function() {
         // Handle keys for form inputs / edit mode
         if (isEditing) return;
 
+        // Clear native text selection on any key except those that use it
+        // Also skip modifier keys themselves (Control, Shift, etc.)
+        const isModifier = ['Control', 'Shift', 'Alt', 'Meta'].includes(e.key);
+        const isTextSelectionKey = e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft');
+        const isTextCopyKey = e.ctrlKey && (e.key === 'c' || e.key === 'C');
+        if (!isModifier && !isTextSelectionKey && !isTextCopyKey) {
+            window.getSelection().removeAllRanges();
+        }
+
+        // Ctrl+A: select all blocks
+        if (e.ctrlKey && (e.key === 'a' || e.key === 'A')) {
+            e.preventDefault();
+            deselectAll();
+            selectableElements.forEach(el => el.classList.add('selected'));
+            if (selectableElements.length > 0) {
+                currentSelectedIndex = selectableElements.length - 1;
+            }
+            return;
+        }
+
+        // Ctrl+C: copy text to system clipboard
+        // Priority: native text selection (from rubber band) > all text in selected blocks
+        if (e.ctrlKey && (e.key === 'c' || e.key === 'C')) {
+            const sel = window.getSelection();
+            if (sel && sel.toString().length > 0) {
+                // Native text selection exists (e.g. from rubber band) —
+                // let browser handle the copy natively
+                return;
+            }
+            // No text selection — copy all text from selected blocks
+            const selectedItems = document.querySelectorAll('.selected');
+            if (selectedItems.length > 0) {
+                e.preventDefault();
+                const text = Array.from(selectedItems).map(el => el.textContent).join('\n\n');
+                navigator.clipboard.writeText(text);
+            }
+            return;
+        }
+
+        // Ctrl+V: paste text from system clipboard as new blocks
+        if (e.ctrlKey && (e.key === 'v' || e.key === 'V')) {
+            e.preventDefault();
+            navigator.clipboard.readText().then(text => {
+                if (!text) return;
+                pushUndo();
+                const preview = document.getElementById('preview');
+                const html = marked.parse(text);
+                const temp = document.createElement('div');
+                temp.innerHTML = html;
+
+                let refNode = null;
+                if (currentSelectedIndex >= 0 && currentSelectedIndex < selectableElements.length) {
+                    refNode = selectableElements[currentSelectedIndex].nextSibling;
+                }
+
+                const insertedNodes = [];
+                while (temp.firstChild) {
+                    const node = temp.firstChild;
+                    preview.insertBefore(node, refNode);
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        insertedNodes.push(node);
+                    }
+                }
+
+                const resultNodes = mergeAdjacentLists(insertedNodes, preview);
+                highlightInsertedNodes(resultNodes);
+                setupSelectionHandlers();
+                deselectAll();
+                resultNodes.forEach(node => {
+                    if (node.parentNode) node.classList.add('selected');
+                });
+                const lastNode = resultNodes[resultNodes.length - 1];
+                if (lastNode) {
+                    const idx = parseInt(lastNode.getAttribute('data-index'));
+                    if (!isNaN(idx)) currentSelectedIndex = idx;
+                }
+            });
+            return;
+        }
+
+        // Shift+Right: extend text selection forward by one word
+        // Starts from the FIRST selected block if no text is selected.
+        // After extending, if the selection crossed into a non-selected block,
+        // grow the box selection to include it. Scrolls to keep the focus visible.
+        if (e.shiftKey && !e.ctrlKey && e.key === 'ArrowRight') {
+            e.preventDefault();
+            const sel = window.getSelection();
+            if (sel.toString().length > 0) {
+                sel.modify('extend', 'forward', 'word');
+            } else {
+                // No text selection — start from the first selected block
+                const selectedBlocks = Array.from(document.querySelectorAll('#preview > .selected'));
+                const firstBlock = selectedBlocks.length > 0 ? selectedBlocks[0] :
+                    (currentSelectedIndex >= 0 ? selectableElements[currentSelectedIndex] : null);
+                if (firstBlock) {
+                    const walker = document.createTreeWalker(firstBlock, NodeFilter.SHOW_TEXT);
+                    const firstText = walker.nextNode();
+                    if (firstText) {
+                        const range = document.createRange();
+                        range.setStart(firstText, 0);
+                        range.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                        sel.modify('extend', 'forward', 'word');
+                    }
+                }
+            }
+            ensureTextSelectionWithinBoxes();
+            scrollSelectionFocusIntoView();
+            return;
+        }
+
+        // Shift+Left: extend text selection backward by one word
+        // Starts from the LAST selected block if no text is selected.
+        // After extending, if the selection crossed into a non-selected block,
+        // grow the box selection to include it. Scrolls to keep the focus visible.
+        if (e.shiftKey && !e.ctrlKey && e.key === 'ArrowLeft') {
+            e.preventDefault();
+            const sel = window.getSelection();
+            if (sel.toString().length > 0) {
+                sel.modify('extend', 'backward', 'word');
+            } else {
+                // No text selection — start from the end of the last selected block
+                const selectedBlocks = Array.from(document.querySelectorAll('#preview > .selected'));
+                const lastBlock = selectedBlocks.length > 0 ? selectedBlocks[selectedBlocks.length - 1] :
+                    (currentSelectedIndex >= 0 ? selectableElements[currentSelectedIndex] : null);
+                if (lastBlock) {
+                    const walker = document.createTreeWalker(lastBlock, NodeFilter.SHOW_TEXT);
+                    let lastText = null;
+                    let node;
+                    while (node = walker.nextNode()) lastText = node;
+                    if (lastText) {
+                        const range = document.createRange();
+                        range.setStart(lastText, lastText.textContent.length);
+                        range.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                        sel.modify('extend', 'backward', 'word');
+                    }
+                }
+            }
+            ensureTextSelectionWithinBoxes();
+            scrollSelectionFocusIntoView();
+            return;
+        }
+
         // Handle delete option
 
         if (e.key === 'd') {
@@ -234,7 +380,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     deselectAll();
                     selectableElements[newIndex].classList.add('selected');
                     currentSelectedIndex = newIndex;
-                    selectableElements[newIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    selectableElements[newIndex].scrollIntoView({ behavior: 'auto', block: 'nearest' });
                 } else {
                     currentSelectedIndex = -1;
                 }
@@ -342,7 +488,7 @@ document.addEventListener('DOMContentLoaded', function() {
         deselectAll();
         selectableElements[targetIndex].classList.add('selected');
         currentSelectedIndex = targetIndex;
-        selectableElements[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        selectableElements[targetIndex].scrollIntoView({ behavior: 'auto', block: 'nearest' });
     });
 
     // Initial render
