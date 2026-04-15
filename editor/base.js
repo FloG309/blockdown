@@ -137,8 +137,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Handle keyboard navigation for marking several cells (shift + arrow)
-    let lastKey = null;
-    let lastKeyTime = 0;
+    // Chord state for two-key sequences (e.g. "d d" for delete)
+    let chordState = { action: null, pending: false, time: 0 };
+
     document.addEventListener('keydown', function(e) {
         const now = Date.now();
         const isTextarea = e.target.tagName === 'TEXTAREA';
@@ -147,7 +148,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const isInput = e.target.tagName === 'INPUT' || e.target.isContentEditable;
         const isEditing = isTextarea || isCMEditor || isInput;
 
+        const KB = window.Keybindings;
+
         // Layout keyboard shortcuts (Ctrl+= / Ctrl+- for font size, Ctrl+Shift+L for theme)
+        // Not remappable — always hardcoded
         if (e.ctrlKey && (e.key === '=' || e.key === '+') && !isEditing) {
             e.preventDefault();
             if (window.LayoutSettings) window.LayoutSettings.cycleFontSize(1);
@@ -166,26 +170,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Handle undo/redo (works everywhere, including edit mode)
         // But inside CM editor, let CM handle its own undo unless it's block-level
-        if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        if (KB.matchesBinding(e, 'undo')) {
             if (!isCMEditor) {
                 e.preventDefault();
                 undo();
                 return;
             }
-            // Let CM handle its own undo
             return;
         }
-        if (e.ctrlKey && (e.key === 'y' || (e.key === 'z' && e.shiftKey)) || (e.ctrlKey && e.shiftKey && e.key === 'Z')) {
+        // Redo: check remappable binding + hardcoded Ctrl+Shift+Z fallback
+        if (KB.matchesBinding(e, 'redo') ||
+            (e.ctrlKey && e.shiftKey && (e.key === 'z' || e.key === 'Z'))) {
             if (!isCMEditor) {
                 e.preventDefault();
                 redo();
                 return;
             }
-            // Let CM handle its own redo
             return;
         }
 
-        // Ctrl+Enter: render all blurred editors in the selection
+        // Ctrl+Enter: render all blurred editors in the selection (not remappable)
         if (e.ctrlKey && e.key === 'Enter') {
             const selected = Array.from(document.querySelectorAll('.selected'));
             const editors = selected.filter(el =>
@@ -213,14 +217,15 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear native text selection on any key except those that use it
         // Also skip modifier keys themselves (Control, Shift, etc.)
         const isModifier = ['Control', 'Shift', 'Alt', 'Meta'].includes(e.key);
-        const isTextSelectionKey = e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft');
-        const isTextCopyKey = e.ctrlKey && (e.key === 'c' || e.key === 'C');
+        const isTextSelectionKey = KB.matchesBinding(e, 'extendSelForward') ||
+                                   KB.matchesBinding(e, 'extendSelBackward');
+        const isTextCopyKey = KB.matchesBinding(e, 'copyText');
         if (!isModifier && !isTextSelectionKey && !isTextCopyKey) {
             window.getSelection().removeAllRanges();
         }
 
-        // Ctrl+A: select all blocks
-        if (e.ctrlKey && (e.key === 'a' || e.key === 'A')) {
+        // Select all blocks
+        if (KB.matchesBinding(e, 'selectAll')) {
             e.preventDefault();
             deselectAll();
             selectableElements.forEach(el => el.classList.add('selected'));
@@ -230,13 +235,12 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Ctrl+C: copy text to system clipboard
+        // Copy text to system clipboard
         // Priority: native text selection (from rubber band) > all text in selected blocks
-        if (e.ctrlKey && (e.key === 'c' || e.key === 'C')) {
+        if (KB.matchesBinding(e, 'copyText')) {
             const sel = window.getSelection();
             if (sel && sel.toString().length > 0) {
-                // Native text selection exists (e.g. from rubber band) —
-                // let browser handle the copy natively
+                // Native text selection exists — let browser handle the copy natively
                 return;
             }
             // No text selection — copy all text from selected blocks
@@ -249,8 +253,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Ctrl+V: paste text from system clipboard as new blocks
-        if (e.ctrlKey && (e.key === 'v' || e.key === 'V')) {
+        // Paste text from system clipboard as new blocks
+        if (KB.matchesBinding(e, 'pasteText')) {
             e.preventDefault();
             navigator.clipboard.readText().then(text => {
                 if (!text) return;
@@ -290,17 +294,13 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Shift+Right: extend text selection forward by one word
-        // Starts from the FIRST selected block if no text is selected.
-        // After extending, if the selection crossed into a non-selected block,
-        // grow the box selection to include it. Scrolls to keep the focus visible.
-        if (e.shiftKey && !e.ctrlKey && e.key === 'ArrowRight') {
+        // Extend text selection forward by one word
+        if (KB.matchesBinding(e, 'extendSelForward')) {
             e.preventDefault();
             const sel = window.getSelection();
             if (sel.toString().length > 0) {
                 sel.modify('extend', 'forward', 'word');
             } else {
-                // No text selection — start from the first selected block
                 const selectedBlocks = Array.from(document.querySelectorAll('#preview > .selected'));
                 const firstBlock = selectedBlocks.length > 0 ? selectedBlocks[0] :
                     (currentSelectedIndex >= 0 ? selectableElements[currentSelectedIndex] : null);
@@ -322,17 +322,13 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Shift+Left: extend text selection backward by one word
-        // Starts from the LAST selected block if no text is selected.
-        // After extending, if the selection crossed into a non-selected block,
-        // grow the box selection to include it. Scrolls to keep the focus visible.
-        if (e.shiftKey && !e.ctrlKey && e.key === 'ArrowLeft') {
+        // Extend text selection backward by one word
+        if (KB.matchesBinding(e, 'extendSelBackward')) {
             e.preventDefault();
             const sel = window.getSelection();
             if (sel.toString().length > 0) {
                 sel.modify('extend', 'backward', 'word');
             } else {
-                // No text selection — start from the end of the last selected block
                 const selectedBlocks = Array.from(document.querySelectorAll('#preview > .selected'));
                 const lastBlock = selectedBlocks.length > 0 ? selectedBlocks[selectedBlocks.length - 1] :
                     (currentSelectedIndex >= 0 ? selectableElements[currentSelectedIndex] : null);
@@ -356,59 +352,51 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Handle delete option
-
-        if (e.key === 'd') {
-            if (lastKey === 'd' && (now - lastKeyTime) < 1000) {  // 400ms threshold
-                // Double 'd' detected — perform delete
-                console.log('Double D pressed: delete triggered!');
-                pushUndo();
-                const selectedElements = document.querySelectorAll('.selected');
-                // Find the index of the first selected element before removing
-                const firstSelectedIdx = currentSelectedIndex;
-                selectedElements.forEach(el => {
-                    // Destroy CM editors before removing
-                    if (el._cmView && window.CM) {
-                        window.CM.destroyEditor(el._cmView);
-                    }
-                    el.remove();
-                });
-                setupSelectionHandlers();
-                // Select the cell above (or the first cell if deleted from the top)
-                if (selectableElements.length > 0) {
-                    const newIndex = Math.min(Math.max(0, firstSelectedIdx - 1), selectableElements.length - 1);
-                    deselectAll();
-                    selectableElements[newIndex].classList.add('selected');
-                    currentSelectedIndex = newIndex;
-                    selectableElements[newIndex].scrollIntoView({ behavior: 'auto', block: 'nearest' });
-                } else {
-                    currentSelectedIndex = -1;
+        // Handle chord bindings (e.g. "d d" for delete)
+        const deleteResult = KB.matchesBinding(e, 'deleteBlocks', chordState);
+        if (deleteResult === 'partial') {
+            chordState = { action: 'deleteBlocks', pending: true, time: now };
+        } else if (deleteResult === 'complete' && (now - chordState.time) < 1000) {
+            chordState = { action: null, pending: false, time: 0 };
+            pushUndo();
+            const selectedElements = document.querySelectorAll('.selected');
+            const firstSelectedIdx = currentSelectedIndex;
+            selectedElements.forEach(el => {
+                if (el._cmView && window.CM) {
+                    window.CM.destroyEditor(el._cmView);
                 }
-                lastKey = null;  // reset
+                el.remove();
+            });
+            setupSelectionHandlers();
+            if (selectableElements.length > 0) {
+                const newIndex = Math.min(Math.max(0, firstSelectedIdx - 1), selectableElements.length - 1);
+                deselectAll();
+                selectableElements[newIndex].classList.add('selected');
+                currentSelectedIndex = newIndex;
+                selectableElements[newIndex].scrollIntoView({ behavior: 'auto', block: 'nearest' });
             } else {
-                lastKey = 'd';
-                lastKeyTime = now;
+                currentSelectedIndex = -1;
             }
         } else {
-            // Reset if a different key is pressed
-            lastKey = null;
+            // Reset chord if a different key was pressed
+            if (chordState.pending && deleteResult !== 'partial') {
+                chordState = { action: null, pending: false, time: 0 };
+            }
         }
 
         // Handle special case where textarea/CM wrapper is selected but not focused
         const selectedElement = selectableElements[currentSelectedIndex]
         if (selectedElement && selectedElement.tagName === 'TEXTAREA') {
-            if (e.key === 'Enter' && !e.ctrlKey) {
+            if (KB.matchesBinding(e, 'editMode')) {
                 e.preventDefault();
                 selectedElement.focus();
                 selectedElement.classList.remove('selected');
                 return;
             }
         }
-        // Handle special case where CM wrapper is selected but not focused
         if (selectedElement && selectedElement.classList && selectedElement.classList.contains('cm-wrapper')) {
-            if (e.key === 'Enter' && !e.ctrlKey) {
+            if (KB.matchesBinding(e, 'editMode')) {
                 e.preventDefault();
-                // Focus the CM editor inside and scroll to the cursor
                 if (selectedElement._cmView) {
                     const view = selectedElement._cmView;
                     view.focus();
@@ -419,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Only handle if Ctrl key is pressed
+        // Arrow navigation (not remappable)
         if (e.shiftKey) {
             if (e.key === 'ArrowUp') {
                 handleShiftArrowUp(e)
@@ -447,25 +435,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 selectedElement.classList.remove('selected');
             }
         }
-        else if (e.key === 'Enter') {
+        else if (KB.matchesBinding(e, 'editMode')) {
             handleEnter(e)
         }
-        else if (e.key === 'a') {
+        else if (KB.matchesBinding(e, 'insertAbove')) {
             insertTextArea(e, insertBefore = true)
         }
-        else if (e.key === 'b') {
+        else if (KB.matchesBinding(e, 'insertBelow')) {
             insertTextArea(e, insertBefore = false)
         }
-        else if (e.key === 'c') {
+        else if (KB.matchesBinding(e, 'copyBlocks')) {
             copyBlocks();
         }
-        else if (e.key === 'v') {
+        else if (KB.matchesBinding(e, 'pasteBlocks')) {
             pasteBlocks();
         }
-        else if (e.key === 'x') {
+        else if (KB.matchesBinding(e, 'cutBlocks')) {
             cutBlocks();
         }
-        else if (e.key === 'Escape') {
+        else if (KB.matchesBinding(e, 'deselect')) {
             deselectAll();
             currentSelectedIndex = -1;
         }

@@ -2302,3 +2302,194 @@ test.describe('Selection overlay updates on layout change', () => {
     expect(heightAfter).not.toBe(heightBefore);
   });
 });
+
+// =============================================================
+// Feature: Keybinding customization
+// =============================================================
+
+async function waitForTestWriteEditor2(page) {
+  await page.goto('/editor/test-write.html');
+  await page.waitForSelector('#preview h1');
+  await page.waitForFunction(() => window.CM && window.CM.ready && window.Keybindings, { timeout: 5000 });
+}
+
+test.describe('Keybinding customization — panel UI', () => {
+
+  test('shortcuts toggle opens the keybinding panel', async ({ page }) => {
+    await waitForEditor(page);
+
+    await page.locator('#settings-btn').click();
+    const toggle = page.locator('#keybindings-toggle');
+    await expect(toggle).toBeVisible();
+
+    // Panel starts hidden
+    const panel = page.locator('#keybindings-panel');
+    await expect(panel).toHaveClass(/hidden/);
+
+    // Click toggle opens panel
+    await toggle.click();
+    await expect(panel).not.toHaveClass(/hidden/);
+
+    // Panel contains rows with badges
+    const rows = panel.locator('.kb-row');
+    const count = await rows.count();
+    expect(count).toBeGreaterThanOrEqual(15);
+  });
+
+  test('keybinding badges show correct default labels', async ({ page }) => {
+    await waitForEditor(page);
+
+    await page.locator('#settings-btn').click();
+    await page.locator('#keybindings-toggle').click();
+
+    const copyTextBadge = page.locator('.kb-badge[data-action="copyText"]');
+    await expect(copyTextBadge).toHaveText('Ctrl+C');
+
+    const deleteBadge = page.locator('.kb-badge[data-action="deleteBlocks"]');
+    await expect(deleteBadge).toHaveText('D D');
+
+    const extendBadge = page.locator('.kb-badge[data-action="extendSelForward"]');
+    await expect(extendBadge).toContainText('Shift');
+  });
+});
+
+test.describe('Keybinding customization — rebinding', () => {
+
+  test('clicking a badge enters listening mode', async ({ page }) => {
+    await waitForEditor(page);
+
+    await page.locator('#settings-btn').click();
+    await page.locator('#keybindings-toggle').click();
+
+    const badge = page.locator('.kb-badge[data-action="copyBlocks"]');
+    await badge.click();
+    await expect(badge).toHaveClass(/kb-listening/);
+    await expect(badge).toContainText('Press keys');
+  });
+
+  test('pressing Escape cancels rebind', async ({ page }) => {
+    await waitForEditor(page);
+
+    await page.locator('#settings-btn').click();
+    await page.locator('#keybindings-toggle').click();
+
+    const badge = page.locator('.kb-badge[data-action="copyBlocks"]');
+    const originalText = await badge.textContent();
+    await badge.click();
+    await expect(badge).toHaveClass(/kb-listening/);
+
+    await page.keyboard.press('Escape');
+    await expect(badge).not.toHaveClass(/kb-listening/);
+    await expect(badge).toHaveText(originalText);
+  });
+
+  test('rebind a simple key and verify it works', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Open panel and rebind copyBlocks from "c" to "q"
+    await page.locator('#settings-btn').click();
+    await page.locator('#keybindings-toggle').click();
+
+    const badge = page.locator('.kb-badge[data-action="copyBlocks"]');
+    await badge.click();
+    await page.keyboard.press('q');
+
+    // Badge should now show "Q"
+    await expect(badge).toHaveText('Q');
+
+    // Close popover
+    await page.click('#preview-container');
+
+    // Verify the new binding works: select a block, press q to copy, v to paste
+    await pressKey(page, 'ArrowDown');
+    const blocks = await getBlocks(page);
+    const initialCount = await blocks.count();
+    const blockText = await blocks.first().innerText();
+
+    await page.keyboard.press('q');  // copy blocks (rebound from c)
+    await pressKey(page, 'ArrowDown');
+    await pressKey(page, 'v');  // paste blocks
+
+    const newCount = await (await getBlocks(page)).count();
+    expect(newCount).toBe(initialCount + 1);
+  });
+
+  test('rebind persists across reload', async ({ page }) => {
+    await waitForEditor(page);
+
+    // Rebind insertAbove from "a" to "t"
+    await page.locator('#settings-btn').click();
+    await page.locator('#keybindings-toggle').click();
+
+    const badge = page.locator('.kb-badge[data-action="insertAbove"]');
+    await badge.click();
+    await page.keyboard.press('t');
+    await expect(badge).toHaveText('T');
+
+    // Reload and check
+    await page.reload();
+    await waitForEditor(page);
+
+    await page.locator('#settings-btn').click();
+    await page.locator('#keybindings-toggle').click();
+
+    const badgeAfter = page.locator('.kb-badge[data-action="insertAbove"]');
+    await expect(badgeAfter).toHaveText('T');
+
+    // Clean up: reset bindings
+    await page.evaluate(() => window.Keybindings.resetAll());
+  });
+
+  test('conflict detection clears the old binding', async ({ page }) => {
+    await waitForEditor(page);
+
+    await page.locator('#settings-btn').click();
+    await page.locator('#keybindings-toggle').click();
+
+    // Rebind copyBlocks to "x" (which is cutBlocks)
+    const copyBadge = page.locator('.kb-badge[data-action="copyBlocks"]');
+    await copyBadge.click();
+    await page.keyboard.press('x');
+
+    // copyBlocks should now show "X"
+    await expect(copyBadge).toHaveText('X');
+
+    // cutBlocks should have been unbound (shows "—")
+    const cutBadge = page.locator('.kb-badge[data-action="cutBlocks"]');
+    await expect(cutBadge).toHaveText('—');
+
+    // Clean up
+    await page.evaluate(() => window.Keybindings.resetAll());
+  });
+
+  test('rebinding a Ctrl+key combo works', async ({ page }) => {
+    await waitForEditor(page);
+
+    await page.locator('#settings-btn').click();
+    await page.locator('#keybindings-toggle').click();
+
+    // Rebind selectAll to Ctrl+Shift+A
+    const badge = page.locator('.kb-badge[data-action="selectAll"]');
+    await badge.click();
+    await page.keyboard.press('Control+Shift+a');
+    await expect(badge).toContainText('Ctrl+Shift');
+
+    // Close popover
+    await page.click('#preview-container');
+
+    // Verify: old Ctrl+A should NOT select all
+    await pressKey(page, 'ArrowDown');
+    await page.keyboard.press('Control+a');
+    const selectedAfterOld = await page.locator('#preview .selected').count();
+    // May or may not select all (browser default Ctrl+A might do something)
+
+    // Verify: new Ctrl+Shift+A should select all
+    await page.keyboard.press('Control+Shift+a');
+    const totalBlocks = await page.evaluate(() => selectableElements.length);
+    const selectedAfterNew = await page.locator('#preview .selected').count();
+    expect(selectedAfterNew).toBe(totalBlocks);
+
+    // Clean up
+    await page.evaluate(() => window.Keybindings.resetAll());
+  });
+});

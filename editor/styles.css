@@ -925,3 +925,85 @@ textarea:focus {
   min-width: 3.2em;
   text-align: right;
 }
+
+/* ── Keybindings Panel ─────────────────────────────────── */
+
+.keybindings-toggle {
+  width: 100%;
+  padding: 6px 0;
+  margin-top: 8px;
+  border: none;
+  border-top: 1px solid var(--border-color);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-align: center;
+  font-family: inherit;
+}
+
+.keybindings-toggle:hover {
+  color: var(--text-primary);
+}
+
+.keybindings-arrow {
+  display: inline-block;
+  transition: transform 0.2s;
+}
+
+.keybindings-toggle.expanded .keybindings-arrow {
+  transform: rotate(180deg);
+}
+
+.keybindings-panel {
+  margin-top: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.keybindings-panel.hidden {
+  display: none;
+}
+
+.kb-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.kb-label {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+}
+
+.kb-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-family: 'Courier New', Courier, monospace;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  min-width: 36px;
+  text-align: center;
+  transition: border-color 0.15s;
+  white-space: nowrap;
+}
+
+.kb-badge:hover {
+  border-color: var(--accent-color);
+}
+
+.kb-badge.kb-listening {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  animation: kb-pulse 1s infinite;
+}
+
+@keyframes kb-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}

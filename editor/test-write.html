@@ -17,6 +17,7 @@
     <script src="mermaid.js"></script>
     <script src="events.js"></script>
     <script src="rubberband.js"></script>
+    <script src="keybindings.js"></script>
     <script src="settings.js"></script>
     <!-- Custom markdown content (must load before base.js) -->
     <script src="test-write-content.js"></script>
@@ -60,6 +61,11 @@
                                 <span class="settings-slider-value" data-display="paragraphSpacing">1rem</span>
                             </div>
                         </div>
+                        <!-- Keybindings toggle + panel -->
+                        <button id="keybindings-toggle" class="keybindings-toggle" title="Keyboard shortcuts">
+                            Shortcuts <span class="keybindings-arrow">&#9662;</span>
+                        </button>
+                        <div id="keybindings-panel" class="keybindings-panel hidden"></div>
                     </div>
                 </div>
 

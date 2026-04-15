@@ -460,6 +460,143 @@
     updatePopoverControls(settings);
   }
 
+  // ── Keybinding panel ────────────────────────────────────
+
+  let _kbListeningCleanup = null; // cleanup function for active rebind listener
+
+  function initKeybindingsPanel() {
+    const toggle = document.getElementById('keybindings-toggle');
+    const panel = document.getElementById('keybindings-panel');
+    if (!toggle || !panel || !window.Keybindings) return;
+
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      panel.classList.toggle('hidden');
+      toggle.classList.toggle('expanded');
+      if (!panel.classList.contains('hidden')) {
+        renderKeybindingRows(panel);
+      }
+    });
+  }
+
+  function renderKeybindingRows(panel) {
+    const KB = window.Keybindings;
+    panel.innerHTML = '';
+    const bindings = KB.getBindings();
+
+    KB.getActionIds().forEach(actionId => {
+      const row = document.createElement('div');
+      row.className = 'kb-row';
+
+      const label = document.createElement('span');
+      label.className = 'kb-label';
+      label.textContent = KB.getLabel(actionId);
+
+      const badge = document.createElement('span');
+      badge.className = 'kb-badge';
+      badge.setAttribute('data-action', actionId);
+      badge.textContent = KB.formatBinding(bindings[actionId]);
+      badge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startRebind(badge, actionId, panel);
+      });
+
+      row.appendChild(label);
+      row.appendChild(badge);
+      panel.appendChild(row);
+    });
+  }
+
+  function startRebind(badge, actionId, panel) {
+    // Cancel any active rebind
+    if (_kbListeningCleanup) _kbListeningCleanup();
+
+    const KB = window.Keybindings;
+    const originalText = badge.textContent;
+    badge.textContent = 'Press keys\u2026';
+    badge.classList.add('kb-listening');
+
+    let chordFirst = null; // for two-key chord capture
+
+    function onKeyDown(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      // Ignore standalone modifier keys
+      if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
+
+      // Escape cancels the rebind
+      if (e.key === 'Escape' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        cleanup();
+        badge.textContent = originalText;
+        badge.classList.remove('kb-listening');
+        return;
+      }
+
+      const descriptor = {
+        key: e.key,
+        ctrlKey: e.ctrlKey || false,
+        shiftKey: e.shiftKey || false,
+        altKey: e.altKey || false,
+      };
+
+      // Chord capture: if first key is a plain single char (no modifiers),
+      // wait for a second key to form a chord
+      if (!chordFirst && !descriptor.ctrlKey && !descriptor.shiftKey && !descriptor.altKey &&
+          descriptor.key.length === 1) {
+        chordFirst = descriptor;
+        badge.textContent = KB.formatKey(descriptor) + ' + \u2026';
+        // Timeout: if no second key within 1.5s, save as single key
+        chordFirst._timeout = setTimeout(() => {
+          saveSingleBinding(chordFirst);
+        }, 1500);
+        return;
+      }
+
+      // If we have a chord first key, this is the second key
+      if (chordFirst) {
+        clearTimeout(chordFirst._timeout);
+        const chordDescriptor = {
+          key: chordFirst.key,
+          chord: { key: descriptor.key, ctrlKey: descriptor.ctrlKey, shiftKey: descriptor.shiftKey, altKey: descriptor.altKey }
+        };
+        saveBinding(chordDescriptor);
+        return;
+      }
+
+      // Single key (with modifiers)
+      saveSingleBinding(descriptor);
+    }
+
+    function saveSingleBinding(descriptor) {
+      saveBinding(descriptor);
+    }
+
+    function saveBinding(descriptor) {
+      const KB = window.Keybindings;
+      // Check for conflicts — also check against defaults
+      const conflict = KB.findConflict(actionId, descriptor);
+      if (conflict) {
+        // Set the conflicting binding to unbound (empty key)
+        KB.setBinding(conflict, { key: '' });
+      }
+      KB.setBinding(actionId, descriptor);
+      cleanup();
+      renderKeybindingRows(panel);
+    }
+
+    function cleanup() {
+      document.removeEventListener('keydown', onKeyDown, true);
+      badge.classList.remove('kb-listening');
+      chordFirst = null;
+      _kbListeningCleanup = null;
+    }
+
+    _kbListeningCleanup = cleanup;
+    document.addEventListener('keydown', onKeyDown, true);
+  }
+
   // Expose for base.js keydown handler
   window.LayoutSettings = {
     cycleFontSize,
@@ -474,6 +611,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     initPopover();
+    initKeybindingsPanel();
     updatePopoverControls(settings);
   });
 })();
