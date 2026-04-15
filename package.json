@@ -1,13 +1,11 @@
 {
-  "name": "blockdown-minor-ui-fixes",
+  "name": "blockdown",
   "version": "1.0.0",
-  "description": "An in-place markdown renderer (inspired by the Jupyter UI), which allows to edit rendered markdown by inserting localized editing-blocks",
-  "main": "playwright.config.js",
-  "directories": {
-    "test": "tests"
-  },
+  "description": "A block-based markdown editor inspired by Jupyter notebooks. Edit rendered markdown in-place.",
+  "main": "serve.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node serve.js",
+    "test": "npx playwright test"
   },
   "keywords": [],
   "author": "",
